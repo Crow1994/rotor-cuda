@@ -895,7 +895,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			if (k.IsGreaterOrEqual(&tRangeEnd)) {
 				k.Sub(&tRangeDiff);
 			}
-
+			rhex.Set(&keys[i]);
 			// Now k is guaranteed within [tRangeStart, tRangeEnd)
 			p[i] = secp->ComputePublicKey(&k);
 		}
@@ -1321,7 +1321,7 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 
 		if (rKey > 0) {
 			if (isAlive(params)) {
-				rhex.Add(count);
+				//rhex.Add(count);
 
 				if (avgGpuKeyRate > 1000000000) {
 
