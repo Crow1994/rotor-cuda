@@ -295,7 +295,7 @@ bool Rotor::checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode)
 			printf("  Check: %s\n", chkAddr.c_str());
 			printf("  PubX : %s\n", p.x.GetBase16().c_str());
 			printf("=================================================================================\n");
-			return false;
+			return true;
 		}
 	}
 	output(addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p));
