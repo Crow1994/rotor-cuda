@@ -917,6 +917,10 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
 			}
 
+			if (i == 2) {
+				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
+			}
+
 			// Compute the middle key in the group
 			Int k(keys[i]);
 			k.Add((uint64_t)(groupSize / 2));
