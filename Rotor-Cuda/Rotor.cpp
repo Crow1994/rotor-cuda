@@ -835,20 +835,50 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
-	if (rKey > 0) {
-		if (rKeyCount2 == 0) {
-			printf("  Base Key     : Randomly changes %d start Private keys every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
-		}
-		
-		for (int i = 0; i < nbThread; i++) {
-			keys[i].Rand(256);
-			rhex = keys[i];
-			Int k(keys + i);
-			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
-			p[i] = secp->ComputePublicKey(&k);
+  if (rKey > 0) {
+        if (rKeyCount2 == 0) {
+            printf("  Base Key     : Generating %d random private keys within the specified range every %llu.000.000.000 on the counter\n\n", 
+                   nbThread, rKey);
+        }
 
-		}
-	}
+        // Calculate the range difference
+        Int tRangeDiff(tRangeEnd);
+        tRangeDiff.Sub(&tRangeStart);    // tRangeDiff = tRangeEnd - tRangeStart
+        
+        // Add 1 to include tRangeEnd in possible outcomes
+        tRangeDiff.Add(1);
+
+        for (int i = 0; i < nbThread; i++) {
+            bool validKey = false;
+            while (!validKey) {
+                // Generate a random key
+                keys[i].Rand(256);
+                
+                // Ensure the key is within the valid range
+                keys[i].Mod(&tRangeDiff);
+                keys[i].Add(&tRangeStart);
+                
+                // Verify the key is within bounds
+                if (keys[i].IsLower(&tRangeEnd) || keys[i].IsEqual(&tRangeEnd)) {
+                    validKey = true;
+                }
+            }
+
+            // Calculate the middle point for the group if needed
+            Int k(keys + i);
+            uint64_t halfGroup = groupSize / 2;
+            
+            // Only add group offset if it won't exceed range
+            Int tempK(k);
+            tempK.Add(halfGroup);
+            if (tempK.IsLower(&tRangeEnd) || tempK.IsEqual(&tRangeEnd)) {
+                k.Add(halfGroup);
+            }
+            
+            // Compute the public key
+            p[i] = secp->ComputePublicKey(&k);
+        }
+    }
 	else {
 
 		Int tRangeDiff(tRangeEnd);
