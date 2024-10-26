@@ -917,7 +917,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
 			}
 
-			if (i == 2) {
+			if (i == 1) {
 				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
 			}
 
