@@ -885,64 +885,45 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			
 		}
 	}
-
+		
 
 
 	else {
-
-		Int tRangeDiff(tRangeEnd);
-		Int tRangeStart2(tRangeStart);
-		Int tRangeEnd2(tRangeStart);
-
 		Int tThreads;
 		tThreads.SetInt32(nbThread);
-		tRangeDiff.Set(&tRangeEnd);
+		// Divide the full range equally across all threads
+		Int tRangeDiff(tRangeEnd);
 		tRangeDiff.Sub(&tRangeStart);
-		razn = tRangeDiff;
-		tRangeDiff.Div(&tThreads);
+		Int subrangeSize(tRangeDiff);
+		subrangeSize.Div(&tThreads); // Divide the range into `nbThread` subranges
 
-		int rangeShowThreasold = 3;
-		int rangeShowCounter = 0;
-		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
-		for (int i = 0; i < nbThread + 1; i++) {
+		Int tRangeStart2(tRangeStart);
+		for (int i = 0; i < nbThread; i++) {
+			// Set subrange end
+			Int tRangeEnd2(tRangeStart2);
+			tRangeEnd2.Add(&subrangeSize);
 
-			tRangeEnd2.Set(&tRangeStart2);
-			tRangeEnd2.Add(&tRangeDiff);
+			// Generate a random key prefix within the thread's specific range
+			Int randomKey;
+			randomKey.Rand(128); // Random 128-bit prefix for each thread
+			randomKey.ShiftL(128); // Move the random bits to the upper part
 
-			keys[i].Set(&tRangeStart2);
+			// Shift to fit in the current subrange
+			randomKey.Add(&tRangeStart2);
+
+			// Set this starting key
+			keys[i].Set(&randomKey);
 			if (i == 0) {
-				printf("  Thread 00000: %064s ->", keys[i].GetBase16().c_str());
-			}
-			Int dobb;
-			dobb.Set(&tRangeStart2);
-			dobb.Add(&tRangeDiff);
-			if (i == 0) {
-				printf(" %064s \n", dobb.GetBase16().c_str());
-			}
-			if (i == 1) {
-				printf("  Thread 00001: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == 2) {
-				printf("  Thread 00002: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == 3) {
-				printf("  Thread 00003: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-				printf("          ... : \n");
-			}
-			if (i == nbThread - 2) {
-				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == nbThread - 1) {
-				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == nbThread) {
-				printf("  Thread %d: %064s -> %064s \n\n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
 			}
 
-			tRangeStart2.Add(&tRangeDiff);
-			Int k(keys + i);
-			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
+			// Compute the middle key in the group
+			Int k(keys[i]);
+			k.Add((uint64_t)(groupSize / 2));
 			p[i] = secp->ComputePublicKey(&k);
+
+			// Move to the next subrange start
+			tRangeStart2.Add(&subrangeSize);
 		}
 	}
 }
