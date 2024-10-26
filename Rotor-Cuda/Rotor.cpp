@@ -875,22 +875,23 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			// Shift the prefix to the upper part if needed
 			keys[i].ShiftL(256 - prefixBits); // Shift prefix bits to the upper position if necessary
 
-			// Add the range start to move within the specified range
+			// Add the range start to bring it within the range [tRangeStart, tRangeEnd)
 			keys[i].Add(&tRangeStart);
+
+			// Final check: if the key exceeds tRangeEnd, bring it back within range
+			if (keys[i].IsGreaterOrEqual(&tRangeEnd)) {
+				keys[i].Mod(&tRangeDiff); // Wrap around within the range [0, tRangeDiff)
+				keys[i].Add(&tRangeStart); // Shift back into [tRangeStart, tRangeEnd)
+			}
 
 			// Adjust key to the middle of the group
 			Int k(keys + i);
 			k.Add(halfGroupSize);
 
-			// Final range check and wrap-around if k exceeds tRangeEnd
-			if (k.IsGreaterOrEqual(&tRangeEnd)) {
-				k.Sub(&tRangeDiff);
-			}
-
-			// Store the generated prefix for tracking
+			// Set rhex to track the last valid key within range
 			rhex.Set(&keys[i]);
 
-			// Compute the public key using only the prefix part
+			// Now compute the public key using only the prefix part adjusted within the range
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
