@@ -850,7 +850,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 {
 	if (rKey > 0) {
 		if (rKeyCount2 == 0) {
-			printf("  Base Key     : Generating %d random private keys within the specified range every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
+			printf("  Base Key     : Generating %d random private key prefixes within the specified range every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
 		}
 
 		// Calculate the range difference
@@ -860,31 +860,22 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		uint64_t halfGroupSize = (uint64_t)(groupSize / 2);
 
 		// Adjust halfGroupSize if necessary
-		uint64_t rangeDiffSize = tRangeDiff.bits64[0];  // Assuming lower 64 bits represent the range size
+		uint64_t rangeDiffSize = tRangeDiff.bits64[0];
 		if (halfGroupSize >= rangeDiffSize) {
 			halfGroupSize = rangeDiffSize;
 		}
 
-		// Strictly limit maxKeyValue to prevent exceeding the range
-		Int maxKeyValue(tRangeDiff);
-		if (halfGroupSize >= rangeDiffSize) {
-			maxKeyValue.SetInt64(0);  // Set maxKeyValue to zero if halfGroupSize is too large
-		}
-		else {
-			maxKeyValue.Sub(halfGroupSize);  // maxKeyValue = tRangeDiff - halfGroupSize
-		}
+		// Only generate the prefix (e.g., upper 128 bits)
+		int prefixBits = 128;  // Adjust this to control the number of bits in the prefix
 
 		for (int i = 0; i < nbThread; i++) {
-			// Generate random key within [0, maxKeyValue)
-			if (maxKeyValue.IsZero()) {
-				keys[i].SetInt64(0);  // Set key to zero if maxKeyValue is zero
-			}
-			else {
-				keys[i].Rand(256);    // Generate a 256-bit random key
-				keys[i].Mod(&maxKeyValue); // Bring within [0, maxKeyValue)
-			}
+			// Generate the prefix within [0, maxKeyValue)
+			keys[i].Rand(prefixBits); // Generate a random prefix within the specified bit size
 
-			// Shift into the desired range
+			// Shift the prefix to the upper part if needed
+			keys[i].ShiftL(256 - prefixBits); // Shift prefix bits to the upper position if necessary
+
+			// Add the range start to move within the specified range
 			keys[i].Add(&tRangeStart);
 
 			// Adjust key to the middle of the group
@@ -895,8 +886,11 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			if (k.IsGreaterOrEqual(&tRangeEnd)) {
 				k.Sub(&tRangeDiff);
 			}
+
+			// Store the generated prefix for tracking
 			rhex.Set(&keys[i]);
-			// Now k is guaranteed within [tRangeStart, tRangeEnd)
+
+			// Compute the public key using only the prefix part
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
