@@ -890,7 +890,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			keys[i].Set(&currentStart);
 
 			// Print the assigned range for debugging
-			printf("  Thread %05d: %064s -> %064s\n", i, currentStart.GetBase16().c_str(), currentEnd.GetBase16().c_str());
+			//printf("  Thread %05d: %064s -> %064s\n", i, currentStart.GetBase16().c_str(), currentEnd.GetBase16().c_str());
 
 			// Update currentStart for the next thread’s range
 			currentStart.Add(&threadRangeSize);
@@ -964,6 +964,8 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		}
 	}
 }
+#include <chrono> // For high-resolution timer
+
 
 void Rotor::FindKeyGPU(TH_PARAM * ph)
 {
@@ -1000,7 +1002,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 	int iterationsSinceLastJump = 0;
-	const int JUMP_THRESHOLD = 100000;
+	const int JUMP_INTERVAL_SECONDS = 10;
 
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
@@ -1017,13 +1019,26 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->hasStarted = true;
 	ph->rKeyRequest = false;
 
+
+	const int JUMP_INTERVAL_SECONDS = 10; // Adjust as needed
+
+	// Start the timer
+	auto lastJumpTime = std::chrono::high_resolution_clock::now();
+	
 	// GPU Thread
 	while (ok && !endOfSearch) {
 
-		iterationsSinceLastJump++;
-		if (iterationsSinceLastJump >= JUMP_THRESHOLD) {
-			// Reset the counter
-			iterationsSinceLastJump = 0;
+
+		// Check if the time interval has elapsed
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastJumpTime).count();
+
+
+
+		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
+
+			lastJumpTime = currentTime;
+
 
 			// Get new random starting keys
 			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
