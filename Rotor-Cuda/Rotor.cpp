@@ -835,28 +835,20 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
-if (rKey > 0) {
-    if (rKeyCount2 == 0) {
-        printf("  Base Key     : Generating %d random private keys within the specified range every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
-    }
+	if (rKey > 0) {
+		if (rKeyCount2 == 0) {
+			printf("  Base Key     : Randomly changes %d start Private keys every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
+		}
+		
+		for (int i = 0; i < nbThread; i++) {
+			keys[i].Rand(256);
+			rhex = keys[i];
+			Int k(keys + i);
+			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
+			p[i] = secp->ComputePublicKey(&k);
 
-    // Calculate the range difference
-    Int tRangeDiff(tRangeEnd);
-    tRangeDiff.Sub(&tRangeStart); // tRangeDiff = tRangeEnd - tRangeStart
-
-    for (int i = 0; i < nbThread; i++) {
-        // Step 1: Generate a full 256-bit random key (covering the entire keyspace)
-        keys[i].Rand(256); // Generate a 256-bit random key across the full keyspace
-
-        // Step 2: Reduce the random key to fit within the specified range
-        keys[i].Mod(&tRangeDiff);       // keys[i] = keys[i] % tRangeDiff (brings the key within range [0, tRangeDiff - 1])
-        keys[i].Add(&tRangeStart);      // keys[i] = keys[i] + tRangeStart (shifts to be within [tRangeStart, tRangeEnd])
-
-        Int k(keys + i);
-        k.Add((uint64_t)(groupSize / 2)); // Adjust key to the middle of the group if necessary
-        p[i] = secp->ComputePublicKey(&k);
-    }
-}
+		}
+	}
 	else {
 
 		Int tRangeDiff(tRangeEnd);
