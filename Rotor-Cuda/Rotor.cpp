@@ -835,47 +835,30 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
-  if (rKey > 0) {
+ if (rKey > 0) {
         if (rKeyCount2 == 0) {
-            printf("  Base Key     : Generating %d random private keys within the specified range every %llu.000.000.000 on the counter\n\n", 
-                   nbThread, rKey);
+            printf("  Base Key     : Generating %d random private keys within the specified range every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
         }
-
         // Calculate the range difference
         Int tRangeDiff(tRangeEnd);
-        tRangeDiff.Sub(&tRangeStart);    // tRangeDiff = tRangeEnd - tRangeStart
-        
-        // Add 1 to include tRangeEnd in possible outcomes
-        tRangeDiff.Add(1);
+        tRangeDiff.Sub(&tRangeStart); // tRangeDiff = tRangeEnd - tRangeStart
 
         for (int i = 0; i < nbThread; i++) {
-            bool validKey = false;
-            while (!validKey) {
-                // Generate a random key
-                keys[i].Rand(256);
-                
-                // Ensure the key is within the valid range
-                keys[i].Mod(&tRangeDiff);
-                keys[i].Add(&tRangeStart);
-                
-                // Verify the key is within bounds
-                if (keys[i].IsLower(&tRangeEnd) || keys[i].IsEqual(&tRangeEnd)) {
-                    validKey = true;
-                }
-            }
+            // Step 1: Generate a full 256-bit random key (covering the entire keyspace)
+            keys[i].Rand(256); // Generate a 256-bit random key across the full keyspace
 
-            // Calculate the middle point for the group if needed
+            // Step 2: Reduce the random key to fit within the specified range
+            keys[i].Mod(&tRangeDiff);       // keys[i] = keys[i] % tRangeDiff (brings the key within range [0, tRangeDiff - 1])
+            keys[i].Add(&tRangeStart);      // keys[i] = keys[i] + tRangeStart (shifts to be within [tRangeStart, tRangeEnd))
+
             Int k(keys + i);
-            uint64_t halfGroup = groupSize / 2;
-            
-            // Only add group offset if it won't exceed range
-            Int tempK(k);
-            tempK.Add(halfGroup);
-            if (tempK.IsLower(&tRangeEnd) || tempK.IsEqual(&tRangeEnd)) {
-                k.Add(halfGroup);
-            }
-            
-            // Compute the public key
+            k.Add((uint64_t)(groupSize / 2)); // Adjust key to the middle of the group if necessary
+
+            // Ensure k is within [tRangeStart, tRangeEnd)
+            k.Sub(&tRangeStart);       // Shift to range [0, tRangeDiff)
+            k.Mod(&tRangeDiff);        // k = k % tRangeDiff
+            k.Add(&tRangeStart);       // Shift back to [tRangeStart, tRangeEnd)
+
             p[i] = secp->ComputePublicKey(&k);
         }
     }
