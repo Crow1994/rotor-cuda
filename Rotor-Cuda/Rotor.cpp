@@ -875,24 +875,18 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		}
 
 		for (int i = 0; i < nbThread; i++) {
-			// Generate only the upper bits as random and set lower bits to zero
-			if (maxKeyValue.IsZero()) {
-				keys[i].SetInt64(0);  // Set key to zero if maxKeyValue is zero
-			}
-			else {
-				keys[i].Rand(256);    // Generate a 256-bit random key
-				keys[i].Mod(&maxKeyValue); // Bring within [0, maxKeyValue)
+			// Generate a random prefix by generating only the upper bits
+			keys[i].Rand(256); // Generate a 256-bit random key
+			int lowerBitsToZero = 128; // Define how many lower bits you want to zero out
 
-				// Zero out the lower bits to keep only the upper bits
-				int lowerBitsToZero = 128; // Set the number of lower bits to zero, adjust as needed
-				keys[i].ShiftR(lowerBitsToZero); // Shift right to remove the lower bits
-				keys[i].ShiftL(lowerBitsToZero); // Shift left back, leaving the lower bits as zero
-			}
+			// Zero out the lower bits
+			keys[i].ShiftR(lowerBitsToZero); // Shift right to remove lower bits
+			keys[i].ShiftL(lowerBitsToZero); // Shift left to place zeros in the lower bits
 
-			// Shift into the desired range
+			// Shift the key into the desired range
 			keys[i].Add(&tRangeStart);
 
-			// Adjust key to the middle of the group
+			// Adjust the key to the middle of the group
 			Int k(keys + i);
 			k.Add(halfGroupSize);
 
@@ -901,8 +895,9 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				k.Sub(&tRangeDiff);
 			}
 
-			rhex.Set(&keys[i]); // Track the last valid key within range
-			// Now k is guaranteed within [tRangeStart, tRangeEnd)
+			rhex.Set(&keys[i]); // Track the generated key with the prefix
+
+			// Compute the public key
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
