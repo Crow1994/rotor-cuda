@@ -860,41 +860,53 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		uint64_t halfGroupSize = (uint64_t)(groupSize / 2);
 
 		// Adjust halfGroupSize if necessary
-		uint64_t rangeDiffSize = tRangeDiff.bits64[0];
+		uint64_t rangeDiffSize = tRangeDiff.bits64[0];  // Assuming lower 64 bits represent the range size
 		if (halfGroupSize >= rangeDiffSize) {
 			halfGroupSize = rangeDiffSize;
 		}
 
-		// Only generate the prefix (e.g., upper 128 bits)
-		int prefixBits = 128;  // Adjust this to control the number of bits in the prefix
+		// Strictly limit maxKeyValue to prevent exceeding the range
+		Int maxKeyValue(tRangeDiff);
+		if (halfGroupSize >= rangeDiffSize) {
+			maxKeyValue.SetInt64(0);  // Set maxKeyValue to zero if halfGroupSize is too large
+		}
+		else {
+			maxKeyValue.Sub(halfGroupSize);  // maxKeyValue = tRangeDiff - halfGroupSize
+		}
 
 		for (int i = 0; i < nbThread; i++) {
-			// Generate the prefix within [0, maxKeyValue)
-			keys[i].Rand(prefixBits); // Generate a random prefix within the specified bit size
-
-			// Shift the prefix to the upper part if needed
-			keys[i].ShiftL(256 - prefixBits); // Shift prefix bits to the upper position if necessary
-
-			// Add the range start to bring it within the range [tRangeStart, tRangeEnd)
-			keys[i].Add(&tRangeStart);
-
-			// Final check: if the key exceeds tRangeEnd, bring it back within range
-			if (keys[i].IsGreaterOrEqual(&tRangeEnd)) {
-				keys[i].Mod(&tRangeDiff); // Wrap around within the range [0, tRangeDiff)
-				keys[i].Add(&tRangeStart); // Shift back into [tRangeStart, tRangeEnd)
+			// Generate only the upper bits as random and set lower bits to zero
+			if (maxKeyValue.IsZero()) {
+				keys[i].SetInt64(0);  // Set key to zero if maxKeyValue is zero
 			}
+			else {
+				keys[i].Rand(256);    // Generate a 256-bit random key
+				keys[i].Mod(&maxKeyValue); // Bring within [0, maxKeyValue)
+
+				// Zero out the lower bits to keep only the upper bits
+				int lowerBitsToZero = 128; // Set the number of lower bits to zero, adjust as needed
+				keys[i].ShiftR(lowerBitsToZero); // Shift right to remove the lower bits
+				keys[i].ShiftL(lowerBitsToZero); // Shift left back, leaving the lower bits as zero
+			}
+
+			// Shift into the desired range
+			keys[i].Add(&tRangeStart);
 
 			// Adjust key to the middle of the group
 			Int k(keys + i);
 			k.Add(halfGroupSize);
 
-			// Set rhex to track the last valid key within range
-			rhex.Set(&keys[i]);
+			// Final range check and wrap-around if k exceeds tRangeEnd
+			if (k.IsGreaterOrEqual(&tRangeEnd)) {
+				k.Sub(&tRangeDiff);
+			}
 
-			// Now compute the public key using only the prefix part adjusted within the range
+			rhex.Set(&keys[i]); // Track the last valid key within range
+			// Now k is guaranteed within [tRangeStart, tRangeEnd)
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
+
 
 
 	else {
