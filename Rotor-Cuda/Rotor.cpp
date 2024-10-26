@@ -848,86 +848,119 @@ void modulo(Int& result, Int& modulus) {
 
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
+
+	Int tThreads;
+	tThreads.SetInt32(nbThread);
+
 	if (rKey > 0) {
-		Int tRangeDiff(tRangeEnd);
-		tRangeDiff.Sub(&tRangeStart); // tRangeDiff = tRangeEnd - tRangeStart
+		// Calculate the total range
+		Int totalRange(tRangeEnd);
+		totalRange.Sub(&tRangeStart);
 
-		uint64_t halfGroupSize = (uint64_t)(groupSize / 2);
+		// Generate a random starting point within the total range
+		Int randomStart;
+		randomStart.Rand(256);
+		randomStart.Mod(&totalRange);         // Ensure it falls within [0, totalRange)
+		randomStart.Add(&tRangeStart);        // Shift into the defined main range
 
+		// Define the range for all threads to operate within
+		Int subRangeEnd(randomStart);
+		Int subRangeSize(totalRange);         // Set the subrange size to be the total range size (or another value if needed)
+		subRangeEnd.Add(&subRangeSize);
+
+		if (subRangeEnd.IsGreaterOrEqual(&tRangeEnd)) {
+			subRangeEnd.Set(&tRangeEnd);  // Ensure it doesn't exceed the main range
+		}
+
+		// Calculate the size of each thread’s portion of this subrange
+		Int threadRangeSize(subRangeEnd);
+		threadRangeSize.Sub(&randomStart);
+		threadRangeSize.Div(&tThreads);   // Divide the range among threads
+
+		// Print debug information
+		printf("Randomly chosen subrange: %s to %s\n", randomStart.GetBase16().c_str(), subRangeEnd.GetBase16().c_str());
+
+		// Divide the subrange among threads
+		Int currentStart(randomStart);
 		for (int i = 0; i < nbThread; i++) {
-			Int key;
+			Int currentEnd(currentStart);
+			currentEnd.Add(&threadRangeSize); // Set the end of the range for the current thread
 
-			// Generate a random key within the range
-			key.Rand(256);
-			key.Mod(&tRangeDiff); // Bring within [0, tRangeDiff)
-			key.Add(&tRangeStart); // Shift into the desired range
+			// Set the starting key for each thread
+			keys[i].Set(&currentStart);
 
-			// Zero out the lower bits to create a prefix (optional)
-			int lowerBitsToZero = 128; // Adjust this value based on desired prefix length
-			key.ShiftR(lowerBitsToZero); // Shift right to remove the lower bits
-			key.ShiftL(lowerBitsToZero); // Shift left back, zeroing out lower bits
+			// Print the assigned range for debugging
+			printf("  Thread %05d: %064s -> %064s\n", i, currentStart.GetBase16().c_str(), currentEnd.GetBase16().c_str());
 
-			// Adjust key to the middle of the group
-			Int k(key);
-			k.Add(halfGroupSize);
+			// Update currentStart for the next thread’s range
+			currentStart.Add(&threadRangeSize);
 
-			// Wrap around if k exceeds tRangeEnd
-			if (k.IsGreaterOrEqual(&tRangeEnd)) {
-				k.Sub(&tRangeDiff);
-			}
+			// Adjust the key to start in the middle of the thread’s range
+			Int k(keys[i]);
+			k.Add((uint64_t)(groupSize / 2));
 
-			// Assign the key to the keys array
-			keys[i].Set(&key);
-			rhex.Set(&keys[i]);
-			// Compute the public key point
+			// Compute the public key point for this thread's starting key
 			p[i] = secp->ComputePublicKey(&k);
-
-			
 		}
 	}
-		
+
 
 
 	else {
+
+		Int tRangeDiff(tRangeEnd);
+		Int tRangeStart2(tRangeStart);
+		Int tRangeEnd2(tRangeStart);
+
 		Int tThreads;
 		tThreads.SetInt32(nbThread);
-		// Divide the full range equally across all threads
-		Int tRangeDiff(tRangeEnd);
+		tRangeDiff.Set(&tRangeEnd);
 		tRangeDiff.Sub(&tRangeStart);
-		Int subrangeSize(tRangeDiff);
-		subrangeSize.Div(&tThreads); // Divide the range into `nbThread` subranges
+		razn = tRangeDiff;
+		tRangeDiff.Div(&tThreads);
 
-		Int tRangeStart2(tRangeStart);
-		for (int i = 0; i < nbThread; i++) {
-			// Set subrange end
-			Int tRangeEnd2(tRangeStart2);
-			tRangeEnd2.Add(&subrangeSize);
+		int rangeShowThreasold = 3;
+		int rangeShowCounter = 0;
+		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		for (int i = 0; i < nbThread + 1; i++) {
 
-			// Generate a random key prefix within the thread's specific range
-			Int randomKey;
-			randomKey.Rand(128); // Random 128-bit prefix for each thread
-			randomKey.ShiftL(128); // Move the random bits to the upper part
+			tRangeEnd2.Set(&tRangeStart2);
+			tRangeEnd2.Add(&tRangeDiff);
 
-			// Shift to fit in the current subrange
-			randomKey.Add(&tRangeStart2);
-
-			// Set this starting key
-			keys[i].Set(&randomKey);
+			keys[i].Set(&tRangeStart2);
 			if (i == 0) {
-				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
+				printf("  Thread 00000: %064s ->", keys[i].GetBase16().c_str());
 			}
-
+			Int dobb;
+			dobb.Set(&tRangeStart2);
+			dobb.Add(&tRangeDiff);
+			if (i == 0) {
+				printf(" %064s \n", dobb.GetBase16().c_str());
+			}
 			if (i == 1) {
-				printf("  Thread %05d: %064s -> %064s\n", i, keys[i].GetBase16().c_str(), tRangeEnd2.GetBase16().c_str());
+				printf("  Thread 00001: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+			}
+			if (i == 2) {
+				printf("  Thread 00002: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+			}
+			if (i == 3) {
+				printf("  Thread 00003: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+				printf("          ... : \n");
+			}
+			if (i == nbThread - 2) {
+				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+			}
+			if (i == nbThread - 1) {
+				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
+			}
+			if (i == nbThread) {
+				printf("  Thread %d: %064s -> %064s \n\n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
 			}
 
-			// Compute the middle key in the group
-			Int k(keys[i]);
-			k.Add((uint64_t)(groupSize / 2));
+			tRangeStart2.Add(&tRangeDiff);
+			Int k(keys + i);
+			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
 			p[i] = secp->ComputePublicKey(&k);
-
-			// Move to the next subrange start
-			tRangeStart2.Add(&subrangeSize);
 		}
 	}
 }
@@ -966,6 +999,9 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	}
 
 
+	int iterationsSinceLastJump = 0;
+	const int JUMP_THRESHOLD = 1000;
+
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
 	Int* keys = new Int[nbThread];
@@ -983,6 +1019,24 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 	// GPU Thread
 	while (ok && !endOfSearch) {
+
+		iterationsSinceLastJump++;
+		if (iterationsSinceLastJump >= JUMP_THRESHOLD) {
+			// Reset the counter
+			iterationsSinceLastJump = 0;
+
+			// Get new random starting keys
+			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+
+			// Update the keys in the GPU engine
+			ok = g->SetKeys(p);
+
+			// Optionally, log or print a message
+			printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
+		}
+
+
+
 
 		if (ph->rKeyRequest) {
 			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
