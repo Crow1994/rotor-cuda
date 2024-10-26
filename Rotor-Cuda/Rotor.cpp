@@ -1000,7 +1000,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 	int iterationsSinceLastJump = 0;
-	const int JUMP_THRESHOLD = 1000;
+	const int JUMP_THRESHOLD = 100000;
 
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
