@@ -860,45 +860,47 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		uint64_t halfGroupSize = (uint64_t)(groupSize / 2);
 
 		// Adjust halfGroupSize if necessary
-		if (halfGroupSize >= tRangeDiff.bits64[0]) {
-			halfGroupSize = tRangeDiff.bits64[0];
+		uint64_t rangeDiffSize = tRangeDiff.bits64[0];  // Assuming lower 64 bits represent the range size
+		if (halfGroupSize >= rangeDiffSize) {
+			halfGroupSize = rangeDiffSize;
 		}
 
-		// Adjust maxKeyValue to prevent overflow
+		// Strictly limit maxKeyValue to prevent exceeding the range
 		Int maxKeyValue(tRangeDiff);
-		if (halfGroupSize >= tRangeDiff.bits64[0]) {
-			maxKeyValue.SetInt64(0);
+		if (halfGroupSize >= rangeDiffSize) {
+			maxKeyValue.SetInt64(0);  // Set maxKeyValue to zero if halfGroupSize is too large
 		}
 		else {
-			maxKeyValue.Sub(halfGroupSize);
+			maxKeyValue.Sub(halfGroupSize);  // maxKeyValue = tRangeDiff - halfGroupSize
 		}
 
 		for (int i = 0; i < nbThread; i++) {
 			// Generate random key within [0, maxKeyValue)
 			if (maxKeyValue.IsZero()) {
-				keys[i].SetInt64(0);
+				keys[i].SetInt64(0);  // Set key to zero if maxKeyValue is zero
 			}
 			else {
-				keys[i].Rand(256);
-				keys[i].Mod(&maxKeyValue);
+				keys[i].Rand(256);    // Generate a 256-bit random key
+				keys[i].Mod(&maxKeyValue); // Bring within [0, maxKeyValue)
 			}
 
-			// Shift into desired range
+			// Shift into the desired range
 			keys[i].Add(&tRangeStart);
 
 			// Adjust key to the middle of the group
 			Int k(keys + i);
 			k.Add(halfGroupSize);
 
-			// Wrap around if k exceeds tRangeEnd
+			// Final range check and wrap-around if k exceeds tRangeEnd
 			if (k.IsGreaterOrEqual(&tRangeEnd)) {
 				k.Sub(&tRangeDiff);
 			}
 
-			// Now k is within [tRangeStart, tRangeEnd)
+			// Now k is guaranteed within [tRangeStart, tRangeEnd)
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
+
 
 	else {
 
