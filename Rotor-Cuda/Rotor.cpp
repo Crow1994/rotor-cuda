@@ -1051,12 +1051,12 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 
-
+		/*
 		if (ph->rKeyRequest) {
 			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
 			ok = g->SetKeys(p);
 			ph->rKeyRequest = false;
-		}
+		}*/
 
 		// Call kernel
 		switch (searchMode) {
