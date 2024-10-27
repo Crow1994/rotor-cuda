@@ -34,6 +34,25 @@ rk_state localState;
 /* Maximum generated random value */
 #define RK_MAX 0xFFFFFFFFUL
 
+
+void rk_seed(unsigned long seed, rk_state *state)
+{
+    int pos;
+    seed &= 0xffffffffUL;
+
+    /* Knuth's PRNG as used in the Mersenne Twister reference implementation */
+    for (pos = 0; pos < RK_STATE_LEN; pos++) {
+        state->key[pos] = seed;
+        seed = (1812433253UL * (seed ^ (seed >> 30)) + pos + 1) & 0xffffffffUL;
+    }
+
+    state->pos = RK_STATE_LEN;
+}
+
+
+
+
+
 unsigned long getHighResTime() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -51,20 +70,6 @@ void initializeRandomState() {
     rk_seed(seed, &localState);
 }
 
-
-void rk_seed(unsigned long seed, rk_state *state)
-{
-    int pos;
-    seed &= 0xffffffffUL;
-
-    /* Knuth's PRNG as used in the Mersenne Twister reference implementation */
-    for (pos = 0; pos < RK_STATE_LEN; pos++) {
-        state->key[pos] = seed;
-        seed = (1812433253UL * (seed ^ (seed >> 30)) + pos + 1) & 0xffffffffUL;
-    }
-
-    state->pos = RK_STATE_LEN;
-}
 
 /* Magic Mersenne Twister constants */
 #define N 624
