@@ -862,7 +862,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		razn = tRangeDiff;             // Total range for debugging
 		tRangeDiff.Div(&tThreads);     // Divide the range by the number of threads
 
-		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		//printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
 
 		for (int i = 0; i < nbThread; i++) {
 
@@ -1017,7 +1017,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->rKeyRequest = false;
 
 
-	const int JUMP_INTERVAL_SECONDS = 500; // Adjust as needed
+	const int JUMP_INTERVAL_SECONDS = 40; // Adjust as needed
 
 	// Start the timer
 	auto lastJumpTime = std::chrono::high_resolution_clock::now();
