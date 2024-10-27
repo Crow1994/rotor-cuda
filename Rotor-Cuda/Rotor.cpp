@@ -849,57 +849,55 @@ void modulo(Int& result, Int& modulus) {
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
 
-	Int tThreads;
-	tThreads.SetInt32(nbThread);
 
 	if (rKey > 0) {
-		// Calculate the total range
-		Int totalRange(tRangeEnd);
-		totalRange.Sub(&tRangeStart);
+		Int tRangeDiff(tRangeEnd);
+		tRangeDiff.Sub(&tRangeStart); // Calculate the total range as tRangeEnd - tRangeStart
 
-		// Generate a random starting point within the total range
-		Int randomStart;
-		randomStart.Rand(256);
-		randomStart.Mod(&totalRange);         // Ensure it falls within [0, totalRange)
-		randomStart.Add(&tRangeStart);        // Shift into the defined main range
+		Int tRangeStart2(tRangeStart); // Initialize tRangeStart2 to tRangeStart
+		Int tRangeEnd2(tRangeStart);   // Temporary variable to store the end of each thread’s range
 
-		// Define the range for all threads to operate within
-		Int subRangeEnd(randomStart);
-		Int subRangeSize(totalRange);         // Set the subrange size to be the total range size (or another value if needed)
-		subRangeEnd.Add(&subRangeSize);
+		Int tThreads;
+		tThreads.SetInt32(nbThread);
+		razn = tRangeDiff;             // Total range for debugging
+		tRangeDiff.Div(&tThreads);     // Divide the range by the number of threads
 
-		if (subRangeEnd.IsGreaterOrEqual(&tRangeEnd)) {
-			subRangeEnd.Set(&tRangeEnd);  // Ensure it doesn't exceed the main range
-		}
+		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
 
-		// Calculate the size of each thread’s portion of this subrange
-		Int threadRangeSize(subRangeEnd);
-		threadRangeSize.Sub(&randomStart);
-		threadRangeSize.Div(&tThreads);   // Divide the range among threads
-
-		// Print debug information
-		//printf("Randomly chosen subrange: %s to %s\n", randomStart.GetBase16().c_str(), subRangeEnd.GetBase16().c_str());
-
-		// Divide the subrange among threads
-		Int currentStart(randomStart);
 		for (int i = 0; i < nbThread; i++) {
-			Int currentEnd(currentStart);
-			currentEnd.Add(&threadRangeSize); // Set the end of the range for the current thread
 
-			// Set the starting key for each thread
-			keys[i].Set(&currentStart);
+			// Set tRangeEnd2 to the end of the current thread’s subrange
+			tRangeEnd2.Set(&tRangeStart2);
+			tRangeEnd2.Add(&tRangeDiff);
 
-			// Print the assigned range for debugging
-			//printf("  Thread %05d: %064s -> %064s\n", i, currentStart.GetBase16().c_str(), currentEnd.GetBase16().c_str());
+			// Generate a random offset within the thread’s range
+			Int randomOffset;
+			randomOffset.Rand(256);            // Generate a random 256-bit number
+			randomOffset.Mod(&tRangeDiff);     // Ensure it falls within [0, tRangeDiff)
 
-			// Update currentStart for the next thread’s range
-			currentStart.Add(&threadRangeSize);
+			// Set the random starting key within the thread’s range
+			Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
+			randomStartingKey.Add(&randomOffset);  // Add the random offset
 
-			// Adjust the key to start in the middle of the thread’s range
-			Int k(keys[i]);
-			k.Add((uint64_t)(groupSize / 2));
+			// Store the starting key for the thread
+			keys[i].Set(&randomStartingKey);
 
-			// Compute the public key point for this thread's starting key
+			// Debug printing of range and random starting point
+			Int dobb(tRangeStart2);
+			dobb.Add(&tRangeDiff);  // Calculate the end of the range for debug output
+
+			printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
+				tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str(),
+				randomStartingKey.GetBase16().c_str());
+
+			// Update tRangeStart2 to the beginning of the next range for the next thread
+			tRangeStart2.Add(&tRangeDiff);
+
+			// Calculate a key position in the middle of the group as a starting point
+			Int k(randomStartingKey);
+			k.Add((uint64_t)(groupSize / 2));  // Adjust to the middle of the group
+
+			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
