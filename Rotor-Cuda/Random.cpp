@@ -19,7 +19,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <unistd.h>
-
+#include <cstdint>
 
 #define  RK_STATE_LEN 624
 
