@@ -16,6 +16,10 @@
 */
 
 #include "Random.h"
+#include <time.h>
+#include <sys/time.h>
+#include <unistd.h>
+
 
 #define  RK_STATE_LEN 624
 
@@ -29,6 +33,24 @@ rk_state localState;
 
 /* Maximum generated random value */
 #define RK_MAX 0xFFFFFFFFUL
+
+unsigned long getHighResTime() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned long)(tv.tv_sec * 1000000 + tv.tv_usec);
+}
+
+void initializeRandomState() {
+    unsigned long timeSeed = getHighResTime();
+    unsigned long pidSeed = (unsigned long)getpid();
+    unsigned long ptrSeed = (unsigned long)(uintptr_t)&timeSeed;
+
+    // Combine seeds using XOR to generate a more unpredictable seed
+    unsigned long seed = timeSeed ^ pidSeed ^ ptrSeed;
+
+    rk_seed(seed, &localState);
+}
+
 
 void rk_seed(unsigned long seed, rk_state *state)
 {
