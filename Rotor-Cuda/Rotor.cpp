@@ -855,7 +855,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		tRangeDiff.Sub(&tRangeStart); // Calculate the total range as tRangeEnd - tRangeStart
 
 		Int tRangeStart2(tRangeStart); // Initialize tRangeStart2 to tRangeStart
-		Int tRangeEnd2(tRangeStart);   // Temporary variable to store the end of each thread’s range
+		Int tRangeEnd2(tRangeStart);   // Temporary variable to store the end of each threadÂ’s range
 
 		Int tThreads;
 		tThreads.SetInt32(nbThread);
@@ -866,16 +866,16 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 		for (int i = 0; i < nbThread; i++) {
 
-			// Set tRangeEnd2 to the end of the current thread’s subrange
+			// Set tRangeEnd2 to the end of the current threadÂ’s subrange
 			tRangeEnd2.Set(&tRangeStart2);
 			tRangeEnd2.Add(&tRangeDiff);
 
-			// Generate a random offset within the thread’s range
+			// Generate a random offset within the threadÂ’s range
 			Int randomOffset;
 			randomOffset.Rand(256);            // Generate a random 256-bit number
 			randomOffset.Mod(&tRangeDiff);     // Ensure it falls within [0, tRangeDiff)
 
-			// Set the random starting key within the thread’s range
+			// Set the random starting key within the threadÂ’s range
 			Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
 			randomStartingKey.Add(&randomOffset);  // Add the random offset
 
@@ -1017,7 +1017,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->rKeyRequest = false;
 
 
-	const int JUMP_INTERVAL_SECONDS = 5; // Adjust as needed
+	const int JUMP_INTERVAL_SECONDS = 100; // Adjust as needed
 
 	// Start the timer
 	auto lastJumpTime = std::chrono::high_resolution_clock::now();
