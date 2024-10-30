@@ -869,8 +869,6 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 
 
-		Int randomKey;
-		randomKey.generateKeyInRange(tRangeStart, tRangeEnd, randomKey);
 
 		for (int i = 0; i < nbThread; i++) {
 
@@ -883,9 +881,11 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			//randomOffset.Rand(256);            // Generate a random 256-bit number
 			//randomOffset.Mod(&tRangeDiff);     // Ensure it falls within [0, tRangeDiff)
 
+			Int randomKey;
+			randomKey.generateKeyInRange(tRangeStart2, tRangeEnd2, randomKey);
 
 			// Set the random starting key within the thread’s range
-
+			//Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
 			//randomStartingKey.Add(&randomKey);  // Add the random offset
 
 			// Store the starting key for the thread
@@ -895,9 +895,9 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			Int dobb(tRangeStart2);
 			dobb.Add(&tRangeDiff);  // Calculate the end of the range for debug output
 
-			printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
+			/*printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
 				tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str(),
-				randomKey.GetBase16().c_str());
+				randomKey.GetBase16().c_str());*/
 
 			// Update tRangeStart2 to the beginning of the next range for the next thread
 			tRangeStart2.Add(&tRangeDiff);
@@ -906,13 +906,8 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			Int k(randomKey);
 			k.Add((uint64_t)(groupSize / 2));  // Adjust to the middle of the group
 
-			randomKey = tRangeStart2;  // Start with tRangeStart2
-
 			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
-
-			
-
 		}
 	}
 
