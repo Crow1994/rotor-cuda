@@ -843,14 +843,13 @@ void modulo(Int& result, Int& modulus) {
 
 
 
-
-
-
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
 
 
 	if (rKey == -5) {
+		initializeRandomState();
+
 		Int tRangeDiff(tRangeEnd);
 		tRangeDiff.Sub(&tRangeStart); // Calculate the total range as tRangeEnd - tRangeStart
 
