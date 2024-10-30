@@ -1038,6 +1038,10 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		}
 	}
 }
+
+
+
+
 #include <chrono> // For high-resolution timer
 
 
@@ -1676,3 +1680,6 @@ char* Rotor::toTimeStr(int sec, char* timeStr)
 //	//y = y / mpf_class(r);
 //	return 0;// y.get_d();
 //}
+
+
+
