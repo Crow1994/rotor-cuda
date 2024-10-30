@@ -1053,15 +1053,15 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 			Int tRangeStart2(tRangeStart);
 			Int tRangeEnd2(tRangeEnd);
-			printf("test0");
+
 			Int random_start_point;
 			random_start_point.generateKeyInRange(tRangeStart2, tRangeEnd2, random_start_point);
 			Int random_end_point;
 			random_end_point.generateKeyInRange(random_start_point, tRangeEnd2, random_end_point);
-			printf("test1");
 			// Get new random starting keys
+			printf("range: %064s -> %064s \n", random_start_point.GetBase16().c_str(), random_end_point.GetBase16().c_str());
 			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
-			printf("test2");
+
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
 
