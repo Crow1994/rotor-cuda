@@ -852,7 +852,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 	if (rKey > 0) {
 
-		initializeRandomState();
+		//initializeRandomState();
 		Int tRangeDiff(tRangeEnd);
 		tRangeDiff.Sub(&tRangeStart); // Calculate the total range as tRangeEnd - tRangeStart
 
@@ -1039,13 +1039,8 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			lastJumpTime = currentTime;
 
 
-			Int random_start_point;
-			random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
-			Int random_end_point;
-			random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
-	
 			// Get new random starting keys
-			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
 
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
@@ -1053,7 +1048,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			// Optionally, log or print a message
 			//printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
 
-			rhex.Set(&random_end_point);
+			rhex.Set(&keys[ph->threadId]);
 		}
 
 
