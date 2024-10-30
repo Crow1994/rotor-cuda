@@ -870,7 +870,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 
 		Int randomKey;
-		randomKey.generateKeyInRange(tRangeStart2, tRangeEnd2, randomKey);
+		randomKey.generateKeyInRange(tRangeStart, tRangeEnd, randomKey);
 
 		for (int i = 0; i < nbThread; i++) {
 
@@ -906,10 +906,12 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			Int k(randomKey);
 			k.Add((uint64_t)(groupSize / 2));  // Adjust to the middle of the group
 
+			randomKey = tRangeStart2;  // Start with tRangeStart2
+
 			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
 
-			randomKey = tRangeStart2;  // Start with tRangeStart2
+			
 
 		}
 	}
