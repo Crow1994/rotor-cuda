@@ -885,7 +885,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			randomKey.generateKeyInRange(tRangeStart2, tRangeEnd2, randomKey);
 
 			printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
-				tRangeStart2.GetBase16().c_str(), tRangeStart2.GetBase16().c_str(),
+				tRangeStart2.GetBase16().c_str(), tRangeEnd2.GetBase16().c_str(),
 				randomKey.GetBase16().c_str());
 
 			// Set the random starting key within the thread’s range
