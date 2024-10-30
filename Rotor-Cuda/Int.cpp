@@ -1030,6 +1030,32 @@ void Int::Rand(Int* randMax) {
 
 }
 
+
+
+
+void Int::generateKeyInRange( Int& rangeStart,  Int& rangeEnd, Int& key) {
+	// Calculate the difference between the end and start of the range
+	Int rangeDiff(rangeEnd);
+	rangeDiff.Sub(&rangeStart);
+
+	// Get the bit length of the range difference
+	int bitLength = rangeDiff.GetBitLength();
+
+	Int randomOffset;
+	do {
+		// Generate a random number with the same bit length as the range difference
+		randomOffset.Rand(bitLength);
+	} while (randomOffset.IsGreaterOrEqual(&rangeDiff));
+
+	// Set the key to be the start of the range plus the random offset
+	key.Set(&rangeStart);
+	key.Add(&randomOffset);
+}
+
+
+
+
+
 // ------------------------------------------------
 
 void Int::Div(Int* a, Int* mod) {
@@ -1223,13 +1249,16 @@ void  Int::SetBase16(const char* value) {
 // ------------------------------------------------
 
 std::string Int::GetBase10() {
-	return GetBaseN(10, "0123456789");
+	char digits10[] = "0123456789";
+	return GetBaseN(10, digits10);
 }
 
 // ------------------------------------------------
 
 std::string Int::GetBase16() {
-	return GetBaseN(16, "0123456789ABCDEF");
+	char digits16[] = "0123456789ABCDEF";
+
+	return GetBaseN(16, digits16);
 }
 
 // ------------------------------------------------
