@@ -1063,7 +1063,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			ok = g->SetKeys(p);
 
 			// Optionally, log or print a message
-			//printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
+			printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
 
 			rhex.Set(&random_start_point);
 
