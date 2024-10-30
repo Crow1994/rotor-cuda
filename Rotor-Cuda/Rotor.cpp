@@ -888,11 +888,11 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				tRangeStart2.GetBase16().c_str(), tRangeEnd2.GetBase16().c_str(),
 				randomKey.GetBase16().c_str());*/
 
-			// Set the random starting key within the thread’s range
-			//Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
-			//randomStartingKey.Add(&randomKey);  // Add the random offset
+				// Set the random starting key within the thread’s range
+				//Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
+				//randomStartingKey.Add(&randomKey);  // Add the random offset
 
-			// Store the starting key for the thread
+				// Store the starting key for the thread
 			keys[i].Set(&randomKey);
 
 			// Debug printing of range and random starting point
@@ -903,7 +903,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str(),
 				randomKey.GetBase16().c_str());*/
 
-			// Update tRangeStart2 to the beginning of the next range for the next thread
+				// Update tRangeStart2 to the beginning of the next range for the next thread
 			tRangeStart2.Add(&tRangeDiff);
 
 			// Calculate a key position in the middle of the group as a starting point
@@ -912,10 +912,10 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
-		
+
 		}
 
-
+	}
 
 
 
