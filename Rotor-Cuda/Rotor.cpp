@@ -891,9 +891,9 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			Int dobb(tRangeStart2);
 			dobb.Add(&tRangeDiff);  // Calculate the end of the range for debug output
 
-			printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
+			/*printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
 				tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str(),
-				randomKey.GetBase16().c_str());
+				randomKey.GetBase16().c_str());*/
 
 			// Update tRangeStart2 to the beginning of the next range for the next thread
 			tRangeStart2.Add(&tRangeDiff);
@@ -1022,7 +1022,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->rKeyRequest = false;
 
 
-	const int JUMP_INTERVAL_SECONDS = 5; // Adjust as needed
+	const int JUMP_INTERVAL_SECONDS = 50; // Adjust as needed
 
 	// Start the timer
 	auto lastJumpTime = std::chrono::high_resolution_clock::now();
