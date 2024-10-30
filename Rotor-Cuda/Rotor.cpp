@@ -912,6 +912,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
+		
 		}
 	}
 
@@ -932,20 +933,20 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 		int rangeShowThreasold = 3;
 		int rangeShowCounter = 0;
-		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		//printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
 		for (int i = 0; i < nbThread + 1; i++) {
 
 			tRangeEnd2.Set(&tRangeStart2);
 			tRangeEnd2.Add(&tRangeDiff);
 
 			keys[i].Set(&tRangeStart2);
-			if (i == 0) {
+			/*if (i == 0) {
 				printf("  Thread 00000: %064s ->", keys[i].GetBase16().c_str());
-			}
+			}*/
 			Int dobb;
 			dobb.Set(&tRangeStart2);
 			dobb.Add(&tRangeDiff);
-			if (i == 0) {
+			/*if (i == 0) {
 				printf(" %064s \n", dobb.GetBase16().c_str());
 			}
 			if (i == 1) {
@@ -966,7 +967,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			}
 			if (i == nbThread) {
 				printf("  Thread %d: %064s -> %064s \n\n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
+			}*/
 
 			tRangeStart2.Add(&tRangeDiff);
 			Int k(keys + i);
@@ -1050,8 +1051,13 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			lastJumpTime = currentTime;
 
 
+			Int random_start_point;
+			random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
+			Int random_end_point;
+			random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
+
 			// Get new random starting keys
-			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
 
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
@@ -1059,7 +1065,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			// Optionally, log or print a message
 			//printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
 
-			rhex.Set(&keys[ph->threadId]);
+			rhex.Set(&random_start_point);
+
+			printf("range: %064s -> %064s \n", random_start_point.GetBase16().c_str(), random_end_point.GetBase16().c_str());
+
 		}
 
 
