@@ -904,7 +904,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 				randomKey.GetBase16().c_str());*/
 
 				// Update tRangeStart2 to the beginning of the next range for the next thread
-			tRangeStart2.Add(&tRangeDiff);
+			tRangeStart2.Set(&randomKey);
 
 			// Calculate a key position in the middle of the group as a starting point
 			Int k(randomKey);
@@ -1119,13 +1119,13 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 			Int tRangeStart2(tRangeStart);
 			Int tRangeEnd2(tRangeEnd);
 
-			Int random_start_point;
-			random_start_point.generateKeyInRange(tRangeStart2, tRangeEnd2, random_start_point);
-			Int random_end_point;
-			random_end_point.generateKeyInRange(random_start_point, tRangeEnd2, random_end_point);
+			//Int random_start_point;
+			//random_start_point.generateKeyInRange(tRangeStart2, tRangeEnd2, random_start_point);
+			//Int random_end_point;
+			//random_end_point.generateKeyInRange(random_start_point, tRangeEnd2, random_end_point);
 			// Get new random starting keys
 			//printf("range: %064s -> %064s \n", random_start_point.GetBase16().c_str(), random_end_point.GetBase16().c_str());
-			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
 
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
