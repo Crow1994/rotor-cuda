@@ -909,7 +909,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 			// Compute the public key for this starting private key
 			p[i] = secp->ComputePublicKey(&k);
 
-			Int randomKey(tRangeStart2);  // Start with tRangeStart2
+			randomKey = tRangeStart2;  // Start with tRangeStart2
 
 		}
 	}
