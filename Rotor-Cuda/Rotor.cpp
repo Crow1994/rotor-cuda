@@ -1165,12 +1165,21 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 	int JUMP_INTERVAL_SECONDS = 20; // Adjust as needed
 
+	// Wait for GPU to start and stabilize (5 seconds)
+	Timer::SleepMillis(5000);
+
 	uint64_t lastCount = counters[ph->threadId];
-	Timer::SleepMillis(1000); // Wait 1 second to get stable speed
+	Timer::SleepMillis(2000); // Measure over 2 seconds
 	uint64_t currentCount = counters[ph->threadId];
 
 	// Calculate speed in Gk/s
-	double singleGPUSpeed = (double)(currentCount - lastCount) / 1000000000.0;
+	double singleGPUSpeed = (double)(currentCount - lastCount) / 2.0 / 1000000000.0;  // Divide by 2 since we measured over 2 seconds
+
+	// Use a minimum speed if we got 0 (e.g., 4 Gk/s as default)
+	if (singleGPUSpeed < 0.1) {  // If speed is too low
+		singleGPUSpeed = 4.0;    // Assume 4 Gk/s as baseline
+		printf("\nNote: Using default speed of 4 Gk/s for calculations\n");
+	}
 
 	// Calculate optimal jump interval based on range size and GPU speed
 	Int gpuRange;
