@@ -1017,14 +1017,39 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 			lastJumpTime = currentTime;
 
-			Int random_start_point;
-			random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
-			Int random_end_point;
-			random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
+
+			// Generate random start point within this GPU's range
+			Int randomStart;
+			randomStart.generateKeyInRange(ph->rangeStart, ph->rangeEnd, randomStart);
+
+			// Calculate a smaller window for focused search
+			Int searchWindow;
+			searchWindow.Set(&ph->rangeEnd);
+			searchWindow.Sub(&ph->rangeStart);
+			Int divisor;
+			divisor.SetInt32(1000); // or whatever number you want to divide by
+			searchWindow.Div(&divisor); // Use Int division instead of uint32_t
+
+			Int randomEnd;
+			randomEnd.Set(&randomStart);
+			randomEnd.Add(&searchWindow);
+
+			// Make sure we don't exceed our GPU's assigned range
+			if (randomEnd.IsGreater(&ph->rangeEnd))
+				randomEnd.Set(&ph->rangeEnd);
+
+
+
+			//Int random_start_point;
+			//random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
+			//Int random_end_point;
+			//random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
+
+
 
 
 			// Get new random starting keys
-			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+			getGPUStartingKeys(randomStart, randomEnd, g->GetGroupSize(), nbThread, keys, p);
 
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
