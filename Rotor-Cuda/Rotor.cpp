@@ -1236,9 +1236,29 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 				Int random_start_point;
 				Int random_end_point;
+				printf("\nGPU %d | Strategy: ", ph->gpuId);
+
+				switch (currentStrategy) {
+				case 0:
+					printf("Random Search");
+					break;
+				case 1:
+					printf("Sequential");
+					break;
+				case 2:
+					printf("Partition-based");
+					break;
+				case 3:
+					printf("Hybrid");
+					break;
+				}
+
 
 				switch (currentStrategy) {
 				case 0: {
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
 					// Pure random strategy
 					int attempts = 0;
 					const int MAX_ATTEMPTS = 10;
@@ -1271,7 +1291,12 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					}
 					break;
 				}
-				case 1: {
+				case 1:
+				{
+
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
 					// Sequential scanning with small random offset
 					static Int offset;
 					static bool firstRun = true;
@@ -1307,6 +1332,9 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					break;
 				}
 				case 2: {
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
 					// Partition-based strategy
 					Int partitionSize;
 					partitionSize.Set(&rangeSize);
@@ -1332,6 +1360,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					break;
 				}
 				case 3: {
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
+
 					// Hybrid approach
 					static Int lastPos;
 					static bool firstRun = true;
@@ -1369,7 +1401,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					random_end_point.Set(&ph->rangeEnd);
 				}
 
-
+				printf("Coverage so far: %.2f%%\n", tracker.getSearchCoverage());
 				// Record this range as scanned
 				tracker.addRange(random_start_point, random_end_point);
 
