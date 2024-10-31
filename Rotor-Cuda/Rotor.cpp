@@ -1307,7 +1307,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
     chunkSize.Mult(10);  // 10 seconds worth = 40 billion
 
 
-
+	JUMP_INTERVAL_SECONDS = 10;
 	
 
 	uint64_t rangeSequence = 0;
