@@ -21,3 +21,8 @@ Change jump interval:
 int JUMP_INTERVAL = 30; // longer time per window
 // or
 const int JUMP_INTERVAL = 10; // shorter time per window
+
+
+
+Contact:
+Discord: mandalorian9144
