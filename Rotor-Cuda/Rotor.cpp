@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cassert>
+#include <chrono> // For high-resolution timer
 #ifndef WIN64
 #include <pthread.h>
 #endif
@@ -1106,7 +1107,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		}
 	}
 }
-#include <chrono> // For high-resolution timer
+
 
 
 void Rotor::FindKeyGPU(TH_PARAM * ph)
