@@ -1383,15 +1383,13 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					Int temp_end2;
 					temp_end2.Set(&ph->rangeEnd);
-					// Pure random strategy
-					int attempts = 0;
-					const int MAX_ATTEMPTS = 10;
-					bool foundUnscanned = false;
+
 
 					lastJumpTime = currentTime;
 
 					//uint64_t currentSeed = (uint64_t)time(NULL);
 					// Generate next deterministic range
+					initializeRandomState();
 					random_start_point2.generateKeyInRange(tempKey_start2, temp_end2, random_start_point2);
 					random_end_point2.Set(&random_start_point2);
 					random_end_point2.Add(&chunkSize);
