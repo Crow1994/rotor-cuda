@@ -1108,28 +1108,30 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 }
 
 
-
+#include <random>
 // Function to generate deterministic range sequence
 Int GetNextRange(uint64_t seed, Int& rangeStart, Int& rangeEnd) {
-	// Use both seed and sequence number for deterministic generation
-	uint64_t combinedSeed = seed;
-	srand(combinedSeed);
-
-	unsigned char rnd[32];
-	for (int i = 0; i < 32; i++) {
-		rnd[i] = rand() & 0xFF;
-	}
-
-	Int randomStart;
 	Int rangeSize;
 	rangeSize.Set(&rangeEnd);
 	rangeSize.Sub(&rangeStart);
 
-	randomStart.SetInt32(0);
-	for (int i = 0; i < 32; i++) {
-		randomStart.bits[i] = rnd[i];
-	}
+	// Initialize random number generator with seed
+	std::mt19937_64 rng(seed);  // 64-bit Mersenne Twister
+	std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
+
+	// Generate two 64-bit random numbers to form a 128-bit number
+	uint64_t rnd1 = dist(rng);
+	uint64_t rnd2 = dist(rng);
+
+	// Combine them into a larger Int if your Int class supports it
+	Int randomStart;
+	// Assuming Int can be constructed from two uint64_t values
+	//randomStart.SetFromTwoUInt64(rnd1, rnd2);
+
+	// Compute randomStart modulo rangeSize
 	randomStart.Mod(&rangeSize);
+
+	// Shift into the desired range
 	randomStart.Add(&rangeStart);
 
 	return randomStart;
@@ -1311,9 +1313,17 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	uint64_t rangeSequence = 0;
 	Int random_start_point;
 	Int random_end_point;
-	uint64_t currentSeed2 = 0;
+	Int tempKey_start;
+	 tempKey_start.Set(&ph->rangeStart);
+
+	 Int temp_end;
+	 temp_end.Set(&ph->rangeEnd);
+
+	//uint64_t currentSeed2 = (uint64_t)time(NULL);
 	// Generate next deterministic range
-	random_start_point = GetNextRange(currentSeed2, ph->rangeStart, ph->rangeEnd);
+	random_start_point.generateKeyInRange(tempKey_start, temp_end, random_start_point);
+
+	
 	random_end_point.Set(&random_start_point);
 	random_end_point.Add(&chunkSize);
 
@@ -1372,7 +1382,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					uint64_t currentSeed = (uint64_t)time(NULL);
 					// Generate next deterministic range
-					random_start_point = GetNextRange(currentSeed, ph->rangeStart, ph->rangeEnd);
+					random_start_point.generateKeyInRange(tempKey_start, temp_end, random_start_point);
 					random_end_point.Set(&random_start_point);
 					random_end_point.Add(&chunkSize);
 
