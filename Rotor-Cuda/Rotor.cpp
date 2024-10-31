@@ -1256,9 +1256,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 				switch (currentStrategy) {
 				case 0: {
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
+
 					// Pure random strategy
 					int attempts = 0;
 					const int MAX_ATTEMPTS = 10;
@@ -1289,14 +1287,20 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 						printf("\nResetting range tracker for GPU %d - Coverage too high\n", ph->gpuId);
 						tracker = RangeTracker(ph->rangeStart, ph->rangeEnd); // Reset tracker
 					}
+
+
+
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
+
+
 					break;
 				}
 				case 1:
 				{
 
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
+					
 					// Sequential scanning with small random offset
 					static Int offset;
 					static bool firstRun = true;
@@ -1329,12 +1333,17 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					if (offset.IsGreater(&ph->rangeEnd)) {
 						offset.Set(&ph->rangeStart);
 					}
-					break;
-				}
-				case 2: {
+
+
 					printf("\nRange: %s -> %s\n",
 						random_start_point.GetBase16().c_str(),
 						random_end_point.GetBase16().c_str());
+
+
+					break;
+				}
+				case 2: {
+
 					// Partition-based strategy
 					Int partitionSize;
 					partitionSize.Set(&rangeSize);
@@ -1357,12 +1366,15 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					random_end_point.Set(&random_start_point);
 					random_end_point.Add(&chunkSize);
-					break;
-				}
-				case 3: {
+
+
 					printf("\nRange: %s -> %s\n",
 						random_start_point.GetBase16().c_str(),
 						random_end_point.GetBase16().c_str());
+
+					break;
+				}
+				case 3: {
 
 					// Hybrid approach
 					static Int lastPos;
@@ -1392,6 +1404,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					if (lastPos.IsGreater(&ph->rangeEnd)) {
 						lastPos.Set(&ph->rangeStart);
 					}
+
+					printf("\nRange: %s -> %s\n",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
+
 					break;
 				}
 				}
