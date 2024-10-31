@@ -1430,10 +1430,6 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 						random_end_point.Set(&random_start_point);
 						random_end_point.Add(&chunkSize);
 
-						if (!tracker.isRangeScanned(random_start_point, random_end_point)) {
-							break;  // Found unscanned range
-						}
-
 						offset.Add(&chunkSize);
 						if (offset.IsGreater(&ph->rangeEnd)) {
 							offset.Set(&ph->rangeStart);
