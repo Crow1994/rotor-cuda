@@ -1304,10 +1304,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
     // 4 billion keys/sec * 10 seconds = 40 billion keys per chunk
 
     chunkSize.SetInt32(4000000000); // 4 billion
-    chunkSize.Mult(60);  // 10 seconds worth = 40 billion
+    chunkSize.Mult(10);  // 10 seconds worth = 40 billion
 
 
-	JUMP_INTERVAL_SECONDS = 60;
+	JUMP_INTERVAL_SECONDS = 10;
 	
 
 	uint64_t rangeSequence = 0;
