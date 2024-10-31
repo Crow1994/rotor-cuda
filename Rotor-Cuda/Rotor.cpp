@@ -1044,17 +1044,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		Int lastCheckedPosition;
 		lastCheckedPosition.Set(&ph->rangeStart);
 
-
-		
-		//int currentStrategy = ph->gpuId % 4;
-
-
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
 				lastJumpTime = currentTime;
 
 				Int random_start_point;
 				Int random_end_point;
-				Int windowSize;
 
 				switch (currentStrategy) {
 				case 0: {
