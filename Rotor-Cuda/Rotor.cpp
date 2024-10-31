@@ -1248,18 +1248,39 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 #endif
 	}
 
-	// Launch GPU threads
-	for (int i = 0; i < nbGPUThread; i++) {
-		params[nbCPUThread + i].obj = this;
-		params[nbCPUThread + i].threadId = 0x80L + i;
-		params[nbCPUThread + i].isRunning = true;
-		params[nbCPUThread + i].gpuId = gpuId[i];
-		params[nbCPUThread + i].gridSizeX = gridSize[2 * i];
-		params[nbCPUThread + i].gridSizeY = gridSize[2 * i + 1];
+ // Calculate total range
+    Int totalRange;
+    totalRange.Set(&rangeEnd);
+    totalRange.Sub(&rangeStart);
+    
+    // Calculate range per GPU
+    Int gpuRangeSize;
+    gpuRangeSize.Set(&totalRange);
+    Int gpuCount2;
+	gpuCount2.SetInt32(nbGPUThread);
+    gpuRangeSize.Div(&gpuCount2);
+    
+    Int currentGPUStart;
+    currentGPUStart.Set(&rangeStart);
 
-		params[nbCPUThread + i].rangeStart.Set(&rangeStart);
-		rangeStart.Add(&rangeDiff);
-		params[nbCPUThread + i].rangeEnd.Set(&rangeStart);
+    // Launch GPU threads with different ranges
+    for (int i = 0; i < nbGPUThread; i++) {
+        params[nbCPUThread + i].obj = this;
+        params[nbCPUThread + i].threadId = 0x80L + i;
+        params[nbCPUThread + i].isRunning = true;
+        params[nbCPUThread + i].gpuId = gpuId[i];
+        params[nbCPUThread + i].gridSizeX = gridSize[2 * i];
+        params[nbCPUThread + i].gridSizeY = gridSize[2 * i + 1];
+
+        // Set unique range for each GPU
+        params[nbCPUThread + i].rangeStart.Set(&currentGPUStart);
+        currentGPUStart.Add(&gpuRangeSize);
+        params[nbCPUThread + i].rangeEnd.Set(&currentGPUStart);
+
+        // Print range assignment for each GPU
+        printf("GPU %d scanning range:\n", gpuId[i]);
+        printf("Start: %s\n", params[nbCPUThread + i].rangeStart.GetBase16().c_str());
+        printf("End  : %s\n\n", params[nbCPUThread + i].rangeEnd.GetBase16().c_str());
 
 
 #ifdef WIN64
