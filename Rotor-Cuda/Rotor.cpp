@@ -1304,10 +1304,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
     // 4 billion keys/sec * 10 seconds = 40 billion keys per chunk
 
     chunkSize.SetInt32(4000000000); // 4 billion
-    chunkSize.Mult(10);  // 10 seconds worth = 40 billion
+    chunkSize.Mult(20);  // 10 seconds worth = 40 billion
 
 
-	JUMP_INTERVAL_SECONDS = 10;
+	JUMP_INTERVAL_SECONDS = 20;
 	
 
 	uint64_t rangeSequence = 0;
@@ -1336,7 +1336,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->rKeyRequest = false;
 
 
-	RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
+	//RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
 	// GPU Thread
 	while (ok && !endOfSearch) {
 
