@@ -1011,53 +1011,158 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastJumpTime).count();
 
+		const int JUMP_INTERVAL_SECONDS = 20; // Adjustable jump time
+		const int STRATEGY_SWITCH_INTERVAL = 300; // Switch strategies every 5 minutes
+		auto lastJumpTime = std::chrono::high_resolution_clock::now();
+		auto lastStrategySwitch = std::chrono::high_resolution_clock::now();
+
+		// Track which areas have been searched
+		int currentStrategy = 0;
+		Int lastCheckedPosition;
+		lastCheckedPosition.Set(&ph->rangeStart);
+
+
+		// Analyze range size to adapt parameters
+		Int rangeSize;
+		rangeSize.Set(&ph->rangeEnd);
+		rangeSize.Sub(&ph->rangeStart);
+
+		// Calculate optimal window sizes based on range size
+		Int baseWindowSize;
+		Int divisor;
+		divisor.SetInt32(1000000); // or whatever number you want to divide by
+		baseWindowSize.Set(&rangeSize);
+		baseWindowSize.Div(&divisor); // Divide range into million parts for base size
+
+
+	
+
+		auto lastJumpTime = std::chrono::high_resolution_clock::now();
+		int currentStrategy = ph->gpuId % 4; // Different initial strategy per GPU
+
+		// Window size calculation
+		Int windowSize;
+		windowSize.Set(&rangeSize);
+		divisor.SetInt32(1000);
+		windowSize.Div(&divisor); // Base window size
+
+		// Strategy selection based on GPU ID
+		int currentStrategy = ph->gpuId % 4;
 
 
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
+				lastJumpTime = currentTime;
 
-			lastJumpTime = currentTime;
+				Int random_start_point;
+				Int random_end_point;
+				Int windowSize;
 
+				switch (currentStrategy) {
+				case 0: {
+					// Pure random strategy
+					random_start_point.Rand(&ph->rangeEnd);
+					if (random_start_point.IsLower(&ph->rangeStart)) {
+						random_start_point.Set(&ph->rangeStart);
+					}
 
-			// Generate random start point within this GPU's range
-			Int randomStart;
-			randomStart.generateKeyInRange(ph->rangeStart, ph->rangeEnd, randomStart);
+					random_end_point.Set(&random_start_point);
+					random_end_point.Add(&windowSize);
+					break;
+				}
+				case 1: {
+					// Sequential scanning with small random offset
+					static Int offset;
+					static bool firstRun = true;
 
-			// Calculate a smaller window for focused search
-			Int searchWindow;
-			searchWindow.Set(&ph->rangeEnd);
-			searchWindow.Sub(&ph->rangeStart);
-			Int divisor;
-			divisor.SetInt32(1000); // or whatever number you want to divide by
-			searchWindow.Div(&divisor); // Use Int division instead of uint32_t
+					if (firstRun) {
+						offset.Set(&ph->rangeStart);
+						firstRun = false;
+					}
 
-			Int randomEnd;
-			randomEnd.Set(&randomStart);
-			randomEnd.Add(&searchWindow);
+					random_start_point.Set(&offset);
+					random_end_point.Set(&random_start_point);
+					random_end_point.Add(&windowSize);
 
-			// Make sure we don't exceed our GPU's assigned range
-			if (randomEnd.IsGreater(&ph->rangeEnd))
-				randomEnd.Set(&ph->rangeEnd);
+					// Update offset for next run
+					offset.Add(&windowSize);
+					if (offset.IsGreater(&ph->rangeEnd)) {
+						offset.Set(&ph->rangeStart);
+					}
+					break;
+				}
+				case 2: {
+					// Partition-based strategy
+					Int partitionSize;
+					partitionSize.Set(&rangeSize);
+					Int gpuCount;
+					gpuCount.SetInt32(nbGPUThread);
+					partitionSize.Div(&gpuCount);
 
+					Int partitionStart;
+					partitionStart.Set(&ph->rangeStart);
+					Int gpuOffset;
+					gpuOffset.SetInt32(ph->gpuId);
+					gpuOffset.Mult(&partitionSize);
+					partitionStart.Add(&gpuOffset);
 
+					// Random point within partition
+					random_start_point.Set(&partitionStart);
+					Int randomOffset;
+					randomOffset.Rand(&partitionSize);
+					random_start_point.Add(&randomOffset);
 
-			//Int random_start_point;
-			//random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
-			//Int random_end_point;
-			//random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
+					random_end_point.Set(&random_start_point);
+					random_end_point.Add(&windowSize);
+					break;
+				}
+				case 3: {
+					// Hybrid approach
+					static Int lastPos;
+					static bool firstRun = true;
 
+					if (firstRun) {
+						lastPos.Set(&ph->rangeStart);
+						firstRun = false;
+					}
 
+					// 50% chance for random jump
+					if (rand() % 2 == 0) {
+						random_start_point.Rand(&ph->rangeEnd);
+						if (random_start_point.IsLower(&ph->rangeStart)) {
+							random_start_point.Set(&ph->rangeStart);
+						}
+					}
+					else {
+						random_start_point.Set(&lastPos);
+						random_start_point.Add(&windowSize);
+					}
 
+					random_end_point.Set(&random_start_point);
+					random_end_point.Add(&windowSize);
 
-			// Get new random starting keys
-			getGPUStartingKeys(randomStart, randomEnd, g->GetGroupSize(), nbThread, keys, p);
+					lastPos.Set(&random_end_point);
+					if (lastPos.IsGreater(&ph->rangeEnd)) {
+						lastPos.Set(&ph->rangeStart);
+					}
+					break;
+				}
+				}
 
-			// Update the keys in the GPU engine
-			ok = g->SetKeys(p);
+				// Ensure end point doesn't exceed range
+				if (random_end_point.IsGreater(&ph->rangeEnd)) {
+					random_end_point.Set(&ph->rangeEnd);
+				}
 
-			// Optionally, log or print a message
-			//printf("Thread %d jumping to new starting point %s.\n", ph->threadId, keys[ph->threadId].GetBase16().c_str());
+				// Update keys and points
+				getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+				ok = g->SetKeys(p);
+				rhex.Set(&random_start_point);
 
-			rhex.Set(&keys[ph->threadId]);
+				// Rotate strategy occasionally
+				if (rand() % 50 == 0) { // 2% chance to switch strategy
+					currentStrategy = (currentStrategy + 1) % 4;
+				}	
+
 		}
 
 
