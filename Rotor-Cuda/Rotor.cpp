@@ -1109,6 +1109,33 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 
 
+// Function to generate deterministic range sequence
+Int GetNextRange(uint64_t seed, Int& rangeStart, Int& rangeEnd) {
+	// Use both seed and sequence number for deterministic generation
+	uint64_t combinedSeed = seed;
+	srand(combinedSeed);
+
+	unsigned char rnd[32];
+	for (int i = 0; i < 32; i++) {
+		rnd[i] = rand() & 0xFF;
+	}
+
+	Int randomStart;
+	Int rangeSize;
+	rangeSize.Set(&rangeEnd);
+	rangeSize.Sub(&rangeStart);
+
+	randomStart.SetInt32(0);
+	for (int i = 0; i < 32; i++) {
+		randomStart.bits[i] = rnd[i];
+	}
+	randomStart.Mod(&rangeSize);
+	randomStart.Add(&rangeStart);
+
+	return randomStart;
+}
+
+
 void Rotor::FindKeyGPU(TH_PARAM * ph)
 {
 
@@ -1281,7 +1308,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 
-
+	uint64_t rangeSequence = 0;
 
 
 
@@ -1323,37 +1350,34 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 				switch (currentStrategy) {
 				case 0: {
-
+					
 					// Pure random strategy
 					int attempts = 0;
 					const int MAX_ATTEMPTS = 10;
 					bool foundUnscanned = false;
 
-					do {
-						random_start_point.Rand(&ph->rangeEnd);
-						if (random_start_point.IsLower(&ph->rangeStart)) {
-							random_start_point.Set(&ph->rangeStart);
-						}
-						random_end_point.Set(&random_start_point);
-						random_end_point.Add(&chunkSize);
+					lastJumpTime = currentTime;
 
-						// Check if this range has NOT been scanned
-						foundUnscanned = !tracker.isRangeScanned(random_start_point, random_end_point);
-						attempts++;
+					Int random_start_point;
+					Int random_end_point;
 
-						if (attempts >= MAX_ATTEMPTS && !foundUnscanned) {
-							// If we can't find unscanned range after max attempts,
-							// let's find next available gap
-							foundUnscanned = tracker.findNextUnscannedRange(random_start_point, random_end_point);
-							break;
-						}
-					} while (!foundUnscanned && attempts < MAX_ATTEMPTS);
+					// Generate next deterministic range
+					random_start_point = GetNextRange(rangeSequence, ph->rangeStart, ph->rangeEnd);
+					random_end_point.Set(&random_start_point);
+					random_end_point.Add(&chunkSize);
 
-					if (!foundUnscanned) {
-						// If still no unscanned range found, reset tracker
-						printf("\nResetting range tracker for GPU %d - Coverage too high\n", ph->gpuId);
-						tracker = RangeTracker(ph->rangeStart, ph->rangeEnd); // Reset tracker
-					}
+					printf("\nGPU %d | seed: %llu",
+						ph->gpuId, rangeSequence);
+					printf("\nRange: %s -> %s",
+						random_start_point.GetBase16().c_str(),
+						random_end_point.GetBase16().c_str());
+
+					// Update keys and points
+					getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+					ok = g->SetKeys(p);
+					rhex.Set(&random_start_point);
+
+					rangeSequence++; // Move to next sequence number
 
 
 
