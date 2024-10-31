@@ -1311,7 +1311,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	uint64_t rangeSequence = 0;
 	Int random_start_point;
 	Int random_end_point;
-	uint64_t currentSeed2 = (uint64_t)time(NULL);
+	uint64_t currentSeed2 = 0;
 	// Generate next deterministic range
 	random_start_point = GetNextRange(currentSeed2, ph->rangeStart, ph->rangeEnd);
 	random_end_point.Set(&random_start_point);
