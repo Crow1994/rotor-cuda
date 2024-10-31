@@ -865,7 +865,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 		int rangeShowThreasold = 3;
 		int rangeShowCounter = 0;
-		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		//printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
 		for (int i = 0; i < nbThread + 1; i++) {
 
 			tRangeEnd2.Set(&tRangeStart2);
