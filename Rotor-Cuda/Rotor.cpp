@@ -1319,7 +1319,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 
-	getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+	getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
 	ok = g->SetKeys(p);
 
 	ph->hasStarted = true;
