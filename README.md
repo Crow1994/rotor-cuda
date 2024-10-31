@@ -1,6 +1,6 @@
-0 - Pure random strategy
+0- Pure random strategy
 
-1- sequential scanning with small random offset
+1- Sequential scanning with small random offset
 
 3- Partition-based strategy
 
