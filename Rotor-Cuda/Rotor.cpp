@@ -1161,7 +1161,53 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->rKeyRequest = false;
 
 
-	const int JUMP_INTERVAL_SECONDS = 20; // Adjust as needed
+
+
+	int JUMP_INTERVAL_SECONDS = 20; // Adjust as needed
+
+	uint64_t lastCount = counters[ph->threadId];
+	Timer::SleepMillis(1000); // Wait 1 second to get stable speed
+	uint64_t currentCount = counters[ph->threadId];
+
+	// Calculate speed in Gk/s
+	double singleGPUSpeed = (double)(currentCount - lastCount) / 1000000000.0;
+
+	// Calculate optimal jump interval based on range size and GPU speed
+	Int gpuRange;
+	gpuRange.Set(&ph->rangeEnd);
+	gpuRange.Sub(&ph->rangeStart);
+
+	// Convert range to double for calculation
+	double rangeSize2 = gpuRange.ToDouble();
+
+	// Calculate time needed to cover range in seconds
+	double timeToComplete = rangeSize2 / (singleGPUSpeed * 1000000000.0);
+
+	// Set jump interval to be approximately 1% of total time
+	int optimalJumpInterval = (int)(timeToComplete * 0.01);
+
+	// Put reasonable bounds on jump interval
+	int MIN_JUMP_INTERVAL = 10;   // Minimum 10 seconds
+	int MAX_JUMP_INTERVAL = 300;  // Maximum 5 minutes
+
+	// Use direct comparison instead of std::max/min
+	JUMP_INTERVAL_SECONDS = optimalJumpInterval < MIN_JUMP_INTERVAL ? MIN_JUMP_INTERVAL :
+		optimalJumpInterval > MAX_JUMP_INTERVAL ? MAX_JUMP_INTERVAL :
+		optimalJumpInterval;
+
+	printf("\nGPU %d | Range coverage calculation:", ph->gpuId);
+	printf("\nRange size: %s", gpuRange.GetBase16().c_str());
+	printf("\nGPU Speed: %.2f Gk/s", singleGPUSpeed);
+	printf("\nEstimated time to cover range: %.2f seconds (%.2f minutes)",
+		timeToComplete, timeToComplete / 60.0);
+	printf("\nOptimal jump interval: %d seconds\n", JUMP_INTERVAL_SECONDS);
+
+
+
+
+
+
+
 	const int STRATEGY_SWITCH_INTERVAL = 300; // Switch strategies every 5 minutes
 
 	// Start the timer
