@@ -1017,7 +1017,6 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		auto lastStrategySwitch = std::chrono::high_resolution_clock::now();
 
 		// Track which areas have been searched
-		int currentStrategy = 0;
 		Int lastCheckedPosition;
 		lastCheckedPosition.Set(&ph->rangeStart);
 
