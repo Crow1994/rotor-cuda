@@ -1304,10 +1304,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
     // 4 billion keys/sec * 10 seconds = 40 billion keys per chunk
 
     chunkSize.SetInt32(4000000000); // 4 billion
-    chunkSize.Mult(10);  // 10 seconds worth = 40 billion
+    chunkSize.Mult(60);  // 10 seconds worth = 40 billion
 
 
-	JUMP_INTERVAL_SECONDS = 10;
+	JUMP_INTERVAL_SECONDS = 60;
 	
 
 	uint64_t rangeSequence = 0;
@@ -1352,6 +1352,8 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
 				lastJumpTime = currentTime;
 
+
+
 				//printf("\nGPU %d | Strategy: ", ph->gpuId);
 
 				/*switch (currentStrategy) {
@@ -1373,6 +1375,14 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				switch (currentStrategy) {
 				case 0: {
 					
+
+					Int random_start_point2;
+					Int random_end_point2;
+					Int tempKey_start2;
+					tempKey_start2.Set(&ph->rangeStart);
+
+					Int temp_end2;
+					temp_end2.Set(&ph->rangeEnd);
 					// Pure random strategy
 					int attempts = 0;
 					const int MAX_ATTEMPTS = 10;
@@ -1380,11 +1390,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					lastJumpTime = currentTime;
 
-					uint64_t currentSeed = (uint64_t)time(NULL);
+					//uint64_t currentSeed = (uint64_t)time(NULL);
 					// Generate next deterministic range
-					random_start_point.generateKeyInRange(tempKey_start, temp_end, random_start_point);
-					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&chunkSize);
+					random_start_point2.generateKeyInRange(tempKey_start2, temp_end2, random_start_point2);
+					random_end_point2.Set(&random_start_point2);
+					random_end_point2.Add(&chunkSize);
 
 					/*printf("\nGPU %d | seed: %llu",
 						ph->gpuId, rangeSequence);
@@ -1393,11 +1403,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 						random_end_point.GetBase16().c_str());*/
 
 					// Update keys and points
-					getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+					getGPUStartingKeys(random_start_point2, random_end_point2, g->GetGroupSize(), nbThread, keys, p);
 					ok = g->SetKeys(p);
-					rhex.Set(&random_start_point);
+					rhex.Set(&random_start_point2);
 
-					rangeSequence++; // Move to next sequence number
+					//rangeSequence++; // Move to next sequence number
 
 
 					break;
@@ -1525,12 +1535,12 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 				//printf("Coverage so far: %.2f%%\n", tracker.getSearchCoverage());
 				// Record this range as scanned
-				tracker.addRange(random_start_point, random_end_point);
+				//tracker.addRange(random_start_point, random_end_point);
 
 				// Update keys and points
-				getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
-				ok = g->SetKeys(p);
-				rhex.Set(&random_start_point);
+				//getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
+				//ok = g->SetKeys(p);
+				//rhex.Set(&random_start_point);
 
 				// Rotate strategy occasionally
 				//if (rand() % 50 == 0) { // 2% chance to switch strategy
