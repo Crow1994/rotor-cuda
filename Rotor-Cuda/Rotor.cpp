@@ -1352,9 +1352,9 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
 				lastJumpTime = currentTime;
 
-				printf("\nGPU %d | Strategy: ", ph->gpuId);
+				//printf("\nGPU %d | Strategy: ", ph->gpuId);
 
-				switch (currentStrategy) {
+				/*switch (currentStrategy) {
 				case 0:
 					printf("Random Search");
 					break;
@@ -1367,7 +1367,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				case 3:
 					printf("Hybrid");
 					break;
-				}
+				}*/
 
 
 				switch (currentStrategy) {
@@ -1386,11 +1386,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					random_end_point.Set(&random_start_point);
 					random_end_point.Add(&chunkSize);
 
-					printf("\nGPU %d | seed: %llu",
+					/*printf("\nGPU %d | seed: %llu",
 						ph->gpuId, rangeSequence);
 					printf("\nRange: %s -> %s",
 						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
+						random_end_point.GetBase16().c_str());*/
 
 					// Update keys and points
 					getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
