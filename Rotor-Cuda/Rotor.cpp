@@ -1026,14 +1026,37 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	// Window size calculation
 	Int windowSize;
 	windowSize.Set(&rangeSize);
-	divisor.SetInt32(1000);
+	divisor.SetInt32(10000);
 	windowSize.Div(&divisor); // Base window size
+
+	// Adaptive chunk sizing
+	Int chunkSize;
+	chunkSize.Set(&rangeSize);
+
+	// For very large keyspaces (> 2^64), use smaller relative chunks
+	if (rangeSize.GetBitLength() > 64) {
+		Int divisor;
+		divisor.SetInt32(10000000); // 10M chunks for large spaces
+		chunkSize.Div(&divisor);
+	}
+	else {
+		Int divisor;
+		divisor.SetInt32(1000000); // 1M chunks for smaller spaces
+		chunkSize.Div(&divisor);
+	}
+
+	// Minimum chunk size to maintain GPU efficiency
+	Int minChunkSize;
+	minChunkSize.SetInt32(1000000); // Never go below 1M keys per chunk
+
+	if (chunkSize.IsLower(&minChunkSize)) {
+		chunkSize.Set(&minChunkSize);
+	}
 
 
 
 	// GPU Thread
 	while (ok && !endOfSearch) {
-
 
 		// Check if the time interval has elapsed
 		auto currentTime = std::chrono::high_resolution_clock::now();
@@ -1059,7 +1082,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					}
 
 					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&windowSize);
+					random_end_point.Add(&chunkSize);
 					break;
 				}
 				case 1: {
@@ -1074,10 +1097,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					random_start_point.Set(&offset);
 					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&windowSize);
+					random_end_point.Add(&chunkSize);
 
 					// Update offset for next run
-					offset.Add(&windowSize);
+					offset.Add(&chunkSize);
 					if (offset.IsGreater(&ph->rangeEnd)) {
 						offset.Set(&ph->rangeStart);
 					}
@@ -1105,7 +1128,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					random_start_point.Add(&randomOffset);
 
 					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&windowSize);
+					random_end_point.Add(&chunkSize);
 					break;
 				}
 				case 3: {
@@ -1127,11 +1150,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					}
 					else {
 						random_start_point.Set(&lastPos);
-						random_start_point.Add(&windowSize);
+						random_start_point.Add(&chunkSize);
 					}
 
 					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&windowSize);
+					random_end_point.Add(&chunkSize);
 
 					lastPos.Set(&random_end_point);
 					if (lastPos.IsGreater(&ph->rangeEnd)) {
