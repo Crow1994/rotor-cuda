@@ -1038,6 +1038,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	
 
 		auto lastJumpTime = std::chrono::high_resolution_clock::now();
+		// Strategy selection based on GPU ID
 		int currentStrategy = ph->gpuId % 4; // Different initial strategy per GPU
 
 		// Window size calculation
@@ -1046,8 +1047,8 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		divisor.SetInt32(1000);
 		windowSize.Div(&divisor); // Base window size
 
-		// Strategy selection based on GPU ID
-		int currentStrategy = ph->gpuId % 4;
+		
+		//int currentStrategy = ph->gpuId % 4;
 
 
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
