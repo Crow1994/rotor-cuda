@@ -1,3 +1,10 @@
+0 - Pure random strategy
+1- sequential scanning with small random offset
+3- Partition-based strategy
+4- Hybrid approach
+5- 
+
+
 To optimize performance:
 
 Adjust window size:
