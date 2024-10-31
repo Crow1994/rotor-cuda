@@ -999,9 +999,37 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 	const int JUMP_INTERVAL_SECONDS = 20; // Adjust as needed
+	const int STRATEGY_SWITCH_INTERVAL = 300; // Switch strategies every 5 minutes
 
 	// Start the timer
 	auto lastJumpTime = std::chrono::high_resolution_clock::now();
+
+
+	// Analyze range size to adapt parameters
+	Int rangeSize;
+	rangeSize.Set(&ph->rangeEnd);
+	rangeSize.Sub(&ph->rangeStart);
+
+	// Calculate optimal window sizes based on range size
+	Int baseWindowSize;
+	Int divisor;
+	divisor.SetInt32(1000000); // or whatever number you want to divide by
+	baseWindowSize.Set(&rangeSize);
+	baseWindowSize.Div(&divisor); // Divide range into million parts for base size
+
+
+
+
+	// Strategy selection based on GPU ID
+	int currentStrategy = ph->gpuId % 4; // Different initial strategy per GPU
+
+	// Window size calculation
+	Int windowSize;
+	windowSize.Set(&rangeSize);
+	divisor.SetInt32(1000);
+	windowSize.Div(&divisor); // Base window size
+
+
 
 	// GPU Thread
 	while (ok && !endOfSearch) {
@@ -1011,40 +1039,11 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastJumpTime).count();
 
-		const int JUMP_INTERVAL_SECONDS = 20; // Adjustable jump time
-		const int STRATEGY_SWITCH_INTERVAL = 300; // Switch strategies every 5 minutes
-		auto lastJumpTime = std::chrono::high_resolution_clock::now();
-		auto lastStrategySwitch = std::chrono::high_resolution_clock::now();
 
 		// Track which areas have been searched
 		Int lastCheckedPosition;
 		lastCheckedPosition.Set(&ph->rangeStart);
 
-
-		// Analyze range size to adapt parameters
-		Int rangeSize;
-		rangeSize.Set(&ph->rangeEnd);
-		rangeSize.Sub(&ph->rangeStart);
-
-		// Calculate optimal window sizes based on range size
-		Int baseWindowSize;
-		Int divisor;
-		divisor.SetInt32(1000000); // or whatever number you want to divide by
-		baseWindowSize.Set(&rangeSize);
-		baseWindowSize.Div(&divisor); // Divide range into million parts for base size
-
-
-	
-
-		auto lastJumpTime = std::chrono::high_resolution_clock::now();
-		// Strategy selection based on GPU ID
-		int currentStrategy = ph->gpuId % 4; // Different initial strategy per GPU
-
-		// Window size calculation
-		Int windowSize;
-		windowSize.Set(&rangeSize);
-		divisor.SetInt32(1000);
-		windowSize.Div(&divisor); // Base window size
 
 		
 		//int currentStrategy = ph->gpuId % 4;
