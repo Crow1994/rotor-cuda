@@ -842,8 +842,171 @@ void modulo(Int & result, Int & modulus) {
 }
 
 
+class RangeTracker {
+private:
+	struct ScanRange {
+		Int start;
+		Int end;
+		int64_t timestamp;
 
+		ScanRange(const Int& s, const Int& e) : start(s), end(e) {
+			timestamp = std::chrono::duration_cast<std::chrono::seconds>(
+				std::chrono::system_clock::now().time_since_epoch()
+			).count();
+		}
+	};
 
+	std::vector<ScanRange> scannedRanges;
+	Int rangeStart;  // Global range start
+	Int rangeEnd;    // Global range end
+	Int chunkSize;   // Size of each chunk
+
+public:
+	RangeTracker( Int& start,  Int& end) {
+		this->rangeStart.Set(&start);
+		this->rangeEnd.Set(&end);
+
+		// Calculate default chunk size
+		this->chunkSize.Set(&end);
+		this->chunkSize.Sub(&start);
+		Int divisor;
+		divisor.SetInt32(1000000); // 1M chunks
+		this->chunkSize.Div(&divisor);
+	}
+
+	void setChunkSize( Int& size) {
+		chunkSize.Set(&size);
+	}
+
+	void addRange(Int& start, Int& end) {
+		scannedRanges.emplace_back(start, end);
+		mergeOverlappingRanges();
+	}
+
+	bool isRangeScanned(Int& start, Int& end) {
+		for ( auto& range : scannedRanges) {
+			Int rStart;
+			Int rEnd;
+			rStart.Set(&range.start);
+			rEnd.Set(&range.end);
+
+			if (!(end.IsLower(&rStart) || start.IsGreater(&rEnd))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool findNextUnscannedRange(Int& start, Int& end) {
+		if (scannedRanges.empty()) {
+			start.Set(&rangeStart);
+			end.Set(&rangeEnd);
+			return true;
+		}
+
+		mergeOverlappingRanges();
+
+		// Check before first range
+		if (rangeStart.IsLower(&scannedRanges[0].start)) {
+			start.Set(&rangeStart);
+			end.Set(&scannedRanges[0].start);
+			return true;
+		}
+
+		// Check between ranges
+		for (size_t i = 0; i < scannedRanges.size() - 1; i++) {
+			Int nextStart;
+			nextStart.Set(&scannedRanges[i + 1].start);
+			if (!scannedRanges[i].end.IsEqual(&nextStart)) {
+				start.Set(&scannedRanges[i].end);
+				end.Set(&scannedRanges[i + 1].start);
+				return true;
+			}
+		}
+
+		// Check after last range
+		if (scannedRanges.back().end.IsLower(&rangeEnd)) {
+			start.Set(&scannedRanges.back().end);
+			end.Set(&rangeEnd);
+			return true;
+		}
+
+		return false;
+	}
+
+	double getSearchCoverage() {
+		mergeOverlappingRanges();
+
+		Int totalRange;
+		totalRange.Set(&rangeEnd);
+		totalRange.Sub(&rangeStart);
+
+		Int coveredRange;
+		coveredRange.SetInt32(0);
+
+		for ( auto& range : scannedRanges) {
+			Int rangeSize;
+			rangeSize.Set(&range.end);
+			rangeSize.Sub(&range.start);
+			coveredRange.Add(&rangeSize);
+		}
+
+		return (coveredRange.ToDouble() / totalRange.ToDouble()) * 100.0;
+	}
+
+	void printStats() {
+		printf("\nRange Tracking Statistics:\n");
+		printf("Number of recorded ranges: %zu\n", scannedRanges.size());
+		printf("Coverage: %.2f%%\n", getSearchCoverage());
+
+		if (!scannedRanges.empty()) {
+			printf("\nLatest scanned range:\n");
+			printf("Start: %s\n", scannedRanges.back().start.GetBase16().c_str());
+			printf("End  : %s\n", scannedRanges.back().end.GetBase16().c_str());
+		}
+
+		Int start, end;
+		printf("\nUnscanned gaps:\n");
+		while (findNextUnscannedRange(start, end)) {
+			printf("Gap: %s -> %s\n",
+				start.GetBase16().c_str(),
+				end.GetBase16().c_str());
+		}
+	}
+
+private:
+	void mergeOverlappingRanges() {
+		if (scannedRanges.empty()) return;
+
+		// Sort ranges by start position
+		std::sort(scannedRanges.begin(), scannedRanges.end(),
+			[]( ScanRange& a,  ScanRange& b) {
+				Int aStart; aStart.Set(&a.start);
+				Int bStart; bStart.Set(&b.start);
+				return aStart.IsLower(&bStart);
+			});
+
+		std::vector<ScanRange> merged;
+		merged.push_back(scannedRanges[0]);
+
+		for (size_t i = 1; i < scannedRanges.size(); i++) {
+			Int curEnd; curEnd.Set(&merged.back().end);
+			Int nextStart; nextStart.Set(&scannedRanges[i].start);
+
+			if (!curEnd.IsLower(&nextStart)) {
+				// Ranges overlap or are adjacent
+				if (merged.back().end.IsLower(&scannedRanges[i].end)) {
+					merged.back().end.Set(&scannedRanges[i].end);
+				}
+			}
+			else {
+				merged.push_back(scannedRanges[i]);
+			}
+		}
+
+		scannedRanges = std::move(merged);
+	}
+};
 
 
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
@@ -1054,7 +1217,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	}
 
 
-
+	RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
 	// GPU Thread
 	while (ok && !endOfSearch) {
 
@@ -1076,28 +1239,64 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				switch (currentStrategy) {
 				case 0: {
 					// Pure random strategy
-					random_start_point.Rand(&ph->rangeEnd);
-					if (random_start_point.IsLower(&ph->rangeStart)) {
-						random_start_point.Set(&ph->rangeStart);
-					}
+					int attempts = 0;
+					const int MAX_ATTEMPTS = 10;
+					bool foundUnscanned = false;
 
-					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&chunkSize);
+					do {
+						random_start_point.Rand(&ph->rangeEnd);
+						if (random_start_point.IsLower(&ph->rangeStart)) {
+							random_start_point.Set(&ph->rangeStart);
+						}
+						random_end_point.Set(&random_start_point);
+						random_end_point.Add(&chunkSize);
+
+						// Check if this range has NOT been scanned
+						foundUnscanned = !tracker.isRangeScanned(random_start_point, random_end_point);
+						attempts++;
+
+						if (attempts >= MAX_ATTEMPTS && !foundUnscanned) {
+							// If we can't find unscanned range after max attempts,
+							// let's find next available gap
+							foundUnscanned = tracker.findNextUnscannedRange(random_start_point, random_end_point);
+							break;
+						}
+					} while (!foundUnscanned && attempts < MAX_ATTEMPTS);
+
+					if (!foundUnscanned) {
+						// If still no unscanned range found, reset tracker
+						printf("\nResetting range tracker for GPU %d - Coverage too high\n", ph->gpuId);
+						tracker = RangeTracker(ph->rangeStart, ph->rangeEnd); // Reset tracker
+					}
 					break;
 				}
 				case 1: {
 					// Sequential scanning with small random offset
 					static Int offset;
 					static bool firstRun = true;
-
 					if (firstRun) {
 						offset.Set(&ph->rangeStart);
 						firstRun = false;
 					}
 
-					random_start_point.Set(&offset);
-					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&chunkSize);
+					// Try to find unscanned range near the current offset
+					int attempts = 0;
+					const int MAX_ATTEMPTS = 5;
+					while (attempts < MAX_ATTEMPTS) {
+						random_start_point.Set(&offset);
+						random_end_point.Set(&random_start_point);
+						random_end_point.Add(&chunkSize);
+
+						if (!tracker.isRangeScanned(random_start_point, random_end_point)) {
+							break;  // Found unscanned range
+						}
+
+						offset.Add(&chunkSize);
+						if (offset.IsGreater(&ph->rangeEnd)) {
+							offset.Set(&ph->rangeStart);
+						}
+						attempts++;
+					}
 
 					// Update offset for next run
 					offset.Add(&chunkSize);
@@ -1168,6 +1367,10 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				if (random_end_point.IsGreater(&ph->rangeEnd)) {
 					random_end_point.Set(&ph->rangeEnd);
 				}
+
+
+				// Record this range as scanned
+				tracker.addRange(random_start_point, random_end_point);
 
 				// Update keys and points
 				getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
