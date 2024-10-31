@@ -1181,11 +1181,9 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 	counters[thId] = 0;
 
-	getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
-	ok = g->SetKeys(p);
 
-	ph->hasStarted = true;
-	ph->rKeyRequest = false;
+
+
 
 
 
@@ -1308,8 +1306,24 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 
 
-	uint64_t rangeSequence = 0;
+	
 
+	uint64_t rangeSequence = 0;
+	Int random_start_point;
+	Int random_end_point;
+
+	// Generate next deterministic range
+	random_start_point = GetNextRange(rangeSequence, ph->rangeStart, ph->rangeEnd);
+	random_end_point.Set(&random_start_point);
+	random_end_point.Add(&chunkSize);
+
+
+
+	getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+	ok = g->SetKeys(p);
+
+	ph->hasStarted = true;
+	ph->rKeyRequest = false;
 
 
 	RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
@@ -1328,8 +1342,6 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
 				lastJumpTime = currentTime;
 
-				Int random_start_point;
-				Int random_end_point;
 				printf("\nGPU %d | Strategy: ", ph->gpuId);
 
 				switch (currentStrategy) {
@@ -1358,11 +1370,9 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 					lastJumpTime = currentTime;
 
-					Int random_start_point;
-					Int random_end_point;
-
+					uint64_t currentSeed = (uint64_t)time(NULL);
 					// Generate next deterministic range
-					random_start_point = GetNextRange(rangeSequence, ph->rangeStart, ph->rangeEnd);
+					random_start_point = GetNextRange(currentSeed, ph->rangeStart, ph->rangeEnd);
 					random_end_point.Set(&random_start_point);
 					random_end_point.Add(&chunkSize);
 
@@ -1378,12 +1388,6 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					rhex.Set(&random_start_point);
 
 					rangeSequence++; // Move to next sequence number
-
-
-
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
 
 
 					break;
@@ -1509,7 +1513,7 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 					random_end_point.Set(&ph->rangeEnd);
 				}
 
-				printf("Coverage so far: %.2f%%\n", tracker.getSearchCoverage());
+				//printf("Coverage so far: %.2f%%\n", tracker.getSearchCoverage());
 				// Record this range as scanned
 				tracker.addRange(random_start_point, random_end_point);
 
