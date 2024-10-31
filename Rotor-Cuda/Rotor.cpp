@@ -852,54 +852,33 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 
 	if (rKey > 0) {
 
-		//initializeRandomState();
 		Int tRangeDiff(tRangeEnd);
-		tRangeDiff.Sub(&tRangeStart); // Calculate the total range as tRangeEnd - tRangeStart
-
-		Int tRangeStart2(tRangeStart); // Initialize tRangeStart2 to tRangeStart
-		Int tRangeEnd2(tRangeStart);   // Temporary variable to store the end of each threads range
+		Int tRangeStart2(tRangeStart);
+		Int tRangeEnd2(tRangeStart);
 
 		Int tThreads;
 		tThreads.SetInt32(nbThread);
-		razn = tRangeDiff;             // Total range for debugging
-		tRangeDiff.Div(&tThreads);     // Divide the range by the number of threads
+		tRangeDiff.Set(&tRangeEnd);
+		tRangeDiff.Sub(&tRangeStart);
+		razn = tRangeDiff;
+		tRangeDiff.Div(&tThreads);
 
-		//printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		int rangeShowThreasold = 3;
+		int rangeShowCounter = 0;
+		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
+		for (int i = 0; i < nbThread + 1; i++) {
 
-		for (int i = 0; i < nbThread; i++) {
-
-			// Set tRangeEnd2 to the end of the current threads subrange
 			tRangeEnd2.Set(&tRangeStart2);
 			tRangeEnd2.Add(&tRangeDiff);
 
-			// Generate a random offset within the threads range
-			Int randomOffset;
-			randomOffset.Rand(256);            // Generate a random 256-bit number
-			randomOffset.Mod(&tRangeDiff);     // Ensure it falls within [0, tRangeDiff)
+			keys[i].Set(&tRangeStart2);
+			Int dobb;
+			dobb.Set(&tRangeStart2);
+			dobb.Add(&tRangeDiff);
 
-			// Set the random starting key within the threads range
-			Int randomStartingKey(tRangeStart2);  // Start with tRangeStart2
-			randomStartingKey.Add(&randomOffset);  // Add the random offset
-
-			// Store the starting key for the thread
-			keys[i].Set(&randomStartingKey);
-
-			// Debug printing of range and random starting point
-			Int dobb(tRangeStart2);
-			dobb.Add(&tRangeDiff);  // Calculate the end of the range for debug output
-
-			/*printf("  Thread %05d: %064s -> %064s, Random Start: %064s\n", i,
-				tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str(),
-				randomStartingKey.GetBase16().c_str());*/
-
-				// Update tRangeStart2 to the beginning of the next range for the next thread
 			tRangeStart2.Add(&tRangeDiff);
-
-			// Calculate a key position in the middle of the group as a starting point
-			Int k(randomStartingKey);
-			k.Add((uint64_t)(groupSize / 2));  // Adjust to the middle of the group
-
-			// Compute the public key for this starting private key
+			Int k(keys + i);
+			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
 			p[i] = secp->ComputePublicKey(&k);
 		}
 	}
@@ -1038,9 +1017,14 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 
 			lastJumpTime = currentTime;
 
+			Int random_start_point;
+			random_start_point.generateKeyInRange(tRangeStart, tRangeEnd, random_start_point);
+			Int random_end_point;
+			random_end_point.generateKeyInRange(random_start_point, tRangeEnd, random_end_point);
+
 
 			// Get new random starting keys
-			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+			getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
 
 			// Update the keys in the GPU engine
 			ok = g->SetKeys(p);
