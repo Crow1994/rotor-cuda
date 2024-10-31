@@ -147,7 +147,6 @@ Rotor::Rotor(const std::vector<unsigned char>& hashORxpoint, int compMode, int s
 	this->rangeDiff2.Set(&this->rangeEnd);
 	this->rangeDiff2.Sub(&this->rangeStart);
 	this->targetCounter = 1;
-	this->gpuStrategies = gpuStrategies;
 	secp = new Secp256K1();
 	secp->Init();
 
