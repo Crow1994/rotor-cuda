@@ -1217,6 +1217,19 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	}
 
 
+
+	    // Calculate chunk size for approximately 10 seconds worth of work
+    // 4 billion keys/sec * 10 seconds = 40 billion keys per chunk
+
+    chunkSize.SetInt32(4000000000); // 4 billion
+    chunkSize.Mult(10);  // 10 seconds worth = 40 billion
+
+
+
+
+
+
+
 	RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
 	// GPU Thread
 	while (ok && !endOfSearch) {
