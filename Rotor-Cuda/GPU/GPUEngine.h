@@ -71,7 +71,8 @@ public:
 	bool LaunchSEARCH_MODE_SA(std::vector<ITEM>& dataFound, bool spinWait = false);
 	bool LaunchSEARCH_MODE_MX(std::vector<ITEM>& dataFound, bool spinWait = false);
 	bool LaunchSEARCH_MODE_SX(std::vector<ITEM>& dataFound, bool spinWait = false);
-
+	bool LaunchSEARCH_MODE_MA_RNG(std::vector<ITEM>& dataFound, bool spinWait = false);
+	bool SetRNGSeeds(const std::vector<uint64_t>& seeds);
 	int GetNbThread();
 	int GetGroupSize();
 
@@ -129,7 +130,7 @@ private:
 
 	uint8_t* DATA;
 	uint64_t TOTAL_COUNT;
-
+	uint64_t* d_rngState;
 };
 
 #endif // GPUENGINEH
