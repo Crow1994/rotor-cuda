@@ -1171,393 +1171,40 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		break;
 	}
 
+	printf("  GPU          : %s\n\n", g->deviceName.c_str());
+	counters[thId] = 0;
 
-	int iterationsSinceLastJump = 0;
-
+	// 2) Optionally set an initial "dummy" public key array (only once)
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
 	Int* keys = new Int[nbThread];
+	// Fill with zero or something
+	for (int i = 0; i < nbThread; i++) {
+		keys[i].SetInt32(0);
+		p[i] = secp->ComputePublicKey(&keys[i]);
+	}
+	ok = g->SetKeys(p);  // Just sets the base pubkeys
+
+	// 3) Now set the RNG seeds (one seed per thread)
+	std::vector<uint64_t> seeds(nbThread);
+	for (int i = 0; i < nbThread; i++) {
+		seeds[i] = 0xAABB00000000ULL + i; // or something random
+	}
+	g->SetRNGSeeds(seeds);
+
+
+	// 4) Main loop: call the *RNG-based* kernel each iteration
 	std::vector<ITEM> found;
-
-	printf("  GPU          : %s\n\n", g->deviceName.c_str());
-
-	counters[thId] = 0;
-
-
-
-
-
-
-
-
-	int JUMP_INTERVAL_SECONDS = 20; // Adjust as needed
-
-	// Wait for GPU to start and stabilize (5 seconds)
-	Timer::SleepMillis(5000);
-
-	uint64_t lastCount = counters[ph->threadId];
-	Timer::SleepMillis(2000); // Measure over 2 seconds
-	uint64_t currentCount = counters[ph->threadId];
-
-	// Calculate speed in Gk/s
-	double singleGPUSpeed = (double)(currentCount - lastCount) / 2.0 / 1000000000.0;  // Divide by 2 since we measured over 2 seconds
-
-	// Use a minimum speed if we got 0 (e.g., 4 Gk/s as default)
-	if (singleGPUSpeed < 0.1) {  // If speed is too low
-		singleGPUSpeed = 4.0;    // Assume 4 Gk/s as baseline
-		printf("\nNote: Using default speed of 4 Gk/s for calculations\n");
-	}
-
-	// Calculate optimal jump interval based on range size and GPU speed
-	Int gpuRange;
-	gpuRange.Set(&ph->rangeEnd);
-	gpuRange.Sub(&ph->rangeStart);
-
-	// Convert range to double for calculation
-	double rangeSize2 = gpuRange.ToDouble();
-
-	// Calculate time needed to cover range in seconds
-	double timeToComplete = rangeSize2 / (singleGPUSpeed * 1000000000.0);
-
-	// Set jump interval to be approximately 1% of total time
-	int optimalJumpInterval = (int)(timeToComplete * 0.01);
-
-	// Put reasonable bounds on jump interval
-	int MIN_JUMP_INTERVAL = 10;   // Minimum 10 seconds
-	int MAX_JUMP_INTERVAL = 300;  // Maximum 5 minutes
-
-	// Use direct comparison instead of std::max/min
-	JUMP_INTERVAL_SECONDS = optimalJumpInterval < MIN_JUMP_INTERVAL ? MIN_JUMP_INTERVAL :
-		optimalJumpInterval > MAX_JUMP_INTERVAL ? MAX_JUMP_INTERVAL :
-		optimalJumpInterval;
-
-	printf("\nGPU %d | Range coverage calculation:", ph->gpuId);
-	printf("\nRange size: %s", gpuRange.GetBase16().c_str());
-	printf("\nGPU Speed: %.2f Gk/s", singleGPUSpeed);
-	printf("\nEstimated time to cover range: %.2f seconds (%.2f minutes)",
-		timeToComplete, timeToComplete / 60.0);
-	printf("\nOptimal jump interval: %d seconds\n", JUMP_INTERVAL_SECONDS);
-
-
-
-
-
-
-
-	const int STRATEGY_SWITCH_INTERVAL = 300; // Switch strategies every 5 minutes
-
-	// Start the timer
-	auto lastJumpTime = std::chrono::high_resolution_clock::now();
-
-
-	// Analyze range size to adapt parameters
-	Int rangeSize;
-	rangeSize.Set(&ph->rangeEnd);
-	rangeSize.Sub(&ph->rangeStart);
-
-	// Calculate optimal window sizes based on range size
-	Int baseWindowSize;
-	Int divisor;
-	divisor.SetInt32(1000000); // or whatever number you want to divide by
-	baseWindowSize.Set(&rangeSize);
-	baseWindowSize.Div(&divisor); // Divide range into million parts for base size
-
-
-
-
-	// Strategy selection based on GPU ID
-	//int currentStrategy = ph->gpuId % 4; // Different initial strategy per GPU
-	int currentStrategy = 0; // Different initial strategy per GPU
-	// Window size calculation
-	Int windowSize;
-	windowSize.Set(&rangeSize);
-	divisor.SetInt32(10000);
-	windowSize.Div(&divisor); // Base window size
-
-	// Adaptive chunk sizing
-	Int chunkSize;
-	chunkSize.Set(&rangeSize);
-
-	// For very large keyspaces (> 2^64), use smaller relative chunks
-	if (rangeSize.GetBitLength() > 64) {
-		Int divisor;
-		divisor.SetInt32(10000000); // 10M chunks for large spaces
-		chunkSize.Div(&divisor);
-	}
-	else {
-		Int divisor;
-		divisor.SetInt32(1000000); // 1M chunks for smaller spaces
-		chunkSize.Div(&divisor);
-	}
-
-	// Minimum chunk size to maintain GPU efficiency
-	Int minChunkSize;
-	minChunkSize.SetInt32(1000000); // Never go below 1M keys per chunk
-
-	if (chunkSize.IsLower(&minChunkSize)) {
-		chunkSize.Set(&minChunkSize);
-	}
-
-
-
-	    // Calculate chunk size for approximately 10 seconds worth of work
-    // 4 billion keys/sec * 10 seconds = 40 billion keys per chunk
-
-    chunkSize.SetInt32(4000000000); // 4 billion
-    chunkSize.Mult(20);  // 10 seconds worth = 40 billion
-
-
-	JUMP_INTERVAL_SECONDS = 20;
-	
-
-	uint64_t rangeSequence = 0;
-	Int random_start_point;
-	Int random_end_point;
-	Int tempKey_start;
-	 tempKey_start.Set(&ph->rangeStart);
-
-	 Int temp_end;
-	 temp_end.Set(&ph->rangeEnd);
-
-	//uint64_t currentSeed2 = (uint64_t)time(NULL);
-	// Generate next deterministic range
-	random_start_point.generateKeyInRange(tempKey_start, temp_end, random_start_point);
-
-	
-	random_end_point.Set(&random_start_point);
-	random_end_point.Add(&chunkSize);
-
-
-
-	getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
-	ok = g->SetKeys(p);
-
 	ph->hasStarted = true;
-	ph->rKeyRequest = false;
-
-
-	//RangeTracker tracker(ph->rangeStart, ph->rangeEnd);
-	// GPU Thread
 	while (ok && !endOfSearch) {
+		found.clear();
 
-		// Check if the time interval has elapsed
-		auto currentTime = std::chrono::high_resolution_clock::now();
-		auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(currentTime - lastJumpTime).count();
-
-
-		// Track which areas have been searched
-		Int lastCheckedPosition;
-		lastCheckedPosition.Set(&ph->rangeStart);
-
-		if (elapsedSeconds >= JUMP_INTERVAL_SECONDS) {
-				lastJumpTime = currentTime;
-
-
-
-				//printf("\nGPU %d | Strategy: ", ph->gpuId);
-
-				/*switch (currentStrategy) {
-				case 0:
-					printf("Random Search");
-					break;
-				case 1:
-					printf("Sequential");
-					break;
-				case 2:
-					printf("Partition-based");
-					break;
-				case 3:
-					printf("Hybrid");
-					break;
-				}*/
-
-
-				switch (currentStrategy) {
-				case 0: {
-					
-
-					Int random_start_point2;
-					Int random_end_point2;
-					Int tempKey_start2;
-					tempKey_start2.Set(&ph->rangeStart);
-
-					Int temp_end2;
-					temp_end2.Set(&ph->rangeEnd);
-
-
-					lastJumpTime = currentTime;
-
-					//uint64_t currentSeed = (uint64_t)time(NULL);
-					// Generate next deterministic range
-					initializeRandomState();
-					random_start_point2.generateKeyInRange(tempKey_start2, temp_end2, random_start_point2);
-					random_end_point2.Set(&random_start_point2);
-					random_end_point2.Add(&chunkSize);
-
-					/*printf("\nGPU %d | seed: %llu",
-						ph->gpuId, rangeSequence);
-					printf("\nRange: %s -> %s",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());*/
-
-					// Update keys and points
-					getGPUStartingKeys(random_start_point2, random_end_point2, g->GetGroupSize(), nbThread, keys, p);
-					ok = g->SetKeys(p);
-					rhex.Set(&random_start_point2);
-
-					//rangeSequence++; // Move to next sequence number
-
-
-					break;
-				}
-				case 1:
-				{
-
-					
-					// Sequential scanning with small random offset
-					static Int offset;
-					static bool firstRun = true;
-					if (firstRun) {
-						offset.Set(&ph->rangeStart);
-						firstRun = false;
-					}
-
-					// Try to find unscanned range near the current offset
-					int attempts = 0;
-					const int MAX_ATTEMPTS = 5;
-					while (attempts < MAX_ATTEMPTS) {
-						random_start_point.Set(&offset);
-						random_end_point.Set(&random_start_point);
-						random_end_point.Add(&chunkSize);
-
-						offset.Add(&chunkSize);
-						if (offset.IsGreater(&ph->rangeEnd)) {
-							offset.Set(&ph->rangeStart);
-						}
-						attempts++;
-					}
-
-					// Update offset for next run
-					offset.Add(&chunkSize);
-					if (offset.IsGreater(&ph->rangeEnd)) {
-						offset.Set(&ph->rangeStart);
-					}
-
-
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
-
-
-					break;
-				}
-				case 2: {
-
-					// Partition-based strategy
-					Int partitionSize;
-					partitionSize.Set(&rangeSize);
-					Int gpuCount;
-					gpuCount.SetInt32(nbGPUThread);
-					partitionSize.Div(&gpuCount);
-
-					Int partitionStart;
-					partitionStart.Set(&ph->rangeStart);
-					Int gpuOffset;
-					gpuOffset.SetInt32(ph->gpuId);
-					gpuOffset.Mult(&partitionSize);
-					partitionStart.Add(&gpuOffset);
-
-					// Random point within partition
-					random_start_point.Set(&partitionStart);
-					Int randomOffset;
-					randomOffset.Rand(&partitionSize);
-					random_start_point.Add(&randomOffset);
-
-					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&chunkSize);
-
-
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
-
-					break;
-				}
-				case 3: {
-
-					// Hybrid approach
-					static Int lastPos;
-					static bool firstRun = true;
-
-					if (firstRun) {
-						lastPos.Set(&ph->rangeStart);
-						firstRun = false;
-					}
-
-					// 50% chance for random jump
-					if (rand() % 2 == 0) {
-						random_start_point.Rand(&ph->rangeEnd);
-						if (random_start_point.IsLower(&ph->rangeStart)) {
-							random_start_point.Set(&ph->rangeStart);
-						}
-					}
-					else {
-						random_start_point.Set(&lastPos);
-						random_start_point.Add(&chunkSize);
-					}
-
-					random_end_point.Set(&random_start_point);
-					random_end_point.Add(&chunkSize);
-
-					lastPos.Set(&random_end_point);
-					if (lastPos.IsGreater(&ph->rangeEnd)) {
-						lastPos.Set(&ph->rangeStart);
-					}
-
-					printf("\nRange: %s -> %s\n",
-						random_start_point.GetBase16().c_str(),
-						random_end_point.GetBase16().c_str());
-
-					break;
-				}
-				}
-
-				// Ensure end point doesn't exceed range
-				if (random_end_point.IsGreater(&ph->rangeEnd)) {
-					random_end_point.Set(&ph->rangeEnd);
-				}
-
-				//printf("Coverage so far: %.2f%%\n", tracker.getSearchCoverage());
-				// Record this range as scanned
-				//tracker.addRange(random_start_point, random_end_point);
-
-				// Update keys and points
-				//getGPUStartingKeys(random_start_point, random_end_point, g->GetGroupSize(), nbThread, keys, p);
-				//ok = g->SetKeys(p);
-				//rhex.Set(&random_start_point);
-
-				// Rotate strategy occasionally
-				//if (rand() % 50 == 0) { // 2% chance to switch strategy
-				//	currentStrategy = (currentStrategy + 1) % 4;
-				//}	
-
-		}
-
-
-
-		/*
-		if (ph->rKeyRequest) {
-			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
-			ok = g->SetKeys(p);
-			ph->rKeyRequest = false;
-		}*/
-
-		// Call kernel
+		// Call *RNG-based* launch
 		switch (searchMode) {
 		case (int)SEARCH_MODE_MA:
-			ok = g->LaunchSEARCH_MODE_MA(found, false);
-			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
-				ITEM it = found[i];
+			ok = g->LaunchSEARCH_MODE_MA_RNG(found, false);
+			// then handle 'found' items as usual...
+			for (ITEM& it : found) {
 				if (coinType == COIN_BTC) {
 					std::string addr = secp->GetAddress(it.mode, it.hash);
 					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
@@ -1572,72 +1219,32 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				}
 			}
 			break;
+
+			// If you have "RNG" versions for other modes, do similarly:
 		case (int)SEARCH_MODE_MX:
-			ok = g->LaunchSEARCH_MODE_MX(found, false);
-			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
-				ITEM it = found[i];
-				//Point pk;
-				//memcpy((uint32_t*)pk.x.bits, (uint32_t*)it.hash, 8);
-				//string addr = secp->GetAddress(it.mode, pk);
-				if (checkPrivKeyX(/*addr,*/ keys[it.thId], it.incr, it.mode)) {
-					nbFoundKey++;
-				}
-			}
+			// g->LaunchSEARCH_MODE_MX_RNG(...);
 			break;
 		case (int)SEARCH_MODE_SA:
-			ok = g->LaunchSEARCH_MODE_SA(found, false);
-			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
-				ITEM it = found[i];
-				if (coinType == COIN_BTC) {
-					std::string addr = secp->GetAddress(it.mode, it.hash);
-					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
-						nbFoundKey++;
-					}
-				}
-				else {
-					std::string addr = secp->GetAddressETH(it.hash);
-					if (checkPrivKeyETH(addr, keys[it.thId], it.incr)) {
-						nbFoundKey++;
-					}
-				}
-			}
+			// g->LaunchSEARCH_MODE_SA_RNG(...);
 			break;
-		case (int)SEARCH_MODE_SX:
-			ok = g->LaunchSEARCH_MODE_SX(found, false);
-			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
-				ITEM it = found[i];
-				//Point pk;
-				//memcpy((uint32_t*)pk.x.bits, (uint32_t*)it.hash, 8);
-				//string addr = secp->GetAddress(it.mode, pk);
-				if (checkPrivKeyX(/*addr,*/ keys[it.thId], it.incr, it.mode)) {
-					nbFoundKey++;
-				}
-			}
-			break;
-		default:
-			break;
+			// ...
 		}
 
-		if (ok) {
-			for (int i = 0; i < nbThread; i++) {
-				keys[i].Add((uint64_t)STEP_SIZE);
-			}
-			counters[thId] += (uint64_t)(STEP_SIZE)*nbThread; // Point
-		}
-
+		// 5) Update counters
+		// Each RNG-based kernel processes STEP_SIZE keys * nbThread implicitly.
+		counters[thId] += (uint64_t)(STEP_SIZE)*nbThread;
 	}
 
-	delete[] keys;
+	// cleanup
 	delete[] p;
+	delete[] keys;
 	delete g;
-
+	ph->isRunning = false;
 #else
 	ph->hasStarted = true;
 	printf("  GPU code not compiled, use -DWITHGPU when compiling.\n");
-#endif
-
 	ph->isRunning = false;
-
+#endif
 }
 
 // ----------------------------------------------------------------------------
