@@ -30,6 +30,7 @@
 #include "GPUBase58.h"
 #include "GPUCompute.h"
 
+
 // ---------------------------------------------------------------------------------------
 #define CudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
 
@@ -44,6 +45,47 @@ inline void __cudaSafeCall(cudaError err, const char* file, const int line)
 }
 
 // ---------------------------------------------------------------------------------------
+
+
+
+
+
+
+__global__ void compute_keys_mode_ma_rng(
+	uint64_t* rngState,             // per-thread RNG states
+	uint32_t  mode,
+	uint8_t* bloomLookUp,
+	int       BLOOM_BITS,
+	uint8_t   BLOOM_HASHES,
+	uint64_t* keys,                 // same as before
+	uint32_t  maxFound,
+	uint32_t* found)
+{
+	// This is the same indexing pattern from your existing code:
+	int groupSize = blockDim.x;
+	int blockOfs = blockIdx.x * groupSize;
+	int xPtr = (blockOfs * 8);
+	int yPtr = xPtr + 4 * groupSize;
+
+	int tid = blockOfs + threadIdx.x;
+	// 1) Generate the random increment for this thread
+	uint64_t rnd = xorshift64star(rngState[tid]);
+
+	// 2) Add that increment to part of the key (for example, the key’s x low 64 bits).
+	//    If you want a full 256-bit mod, you’d do more complex logic,
+	//    but here's a minimal example:
+	keys[xPtr + threadIdx.x] += (rnd & 0xFFFFFFFFULL);
+	// Or do your own scheme, e.g. add to all 4 x-limbs, etc.
+	// You may also want to do "mod secp-order" if you want strictly valid private keys.
+
+	// 3) Call the normal code that computes the addresses
+	ComputeKeysSEARCH_MODE_MA(mode, keys + xPtr, keys + yPtr,
+		bloomLookUp, BLOOM_BITS, BLOOM_HASHES,
+		maxFound, found);
+}
+
+
+
 
 // mode multiple addresses
 __global__ void compute_keys_mode_ma(uint32_t mode, uint8_t* bloomLookUp, int BLOOM_BITS, uint8_t BLOOM_HASHES,
@@ -178,6 +220,24 @@ int _ConvertSMVer2Cores(int major, int minor)
 
 }
 
+
+/*******************************************************************
+ * Minimal XORShift64* pseudo-random generator
+ ******************************************************************/
+__device__ inline uint64_t xorshift64star(uint64_t& state)
+{
+	uint64_t x = state;
+	// XORShift steps
+	x ^= x >> 12;
+	x ^= x << 25;
+	x ^= x >> 27;
+	// Update the state
+	state = x;
+	// Multiply by constant
+	return x * 0x2545F4914F6CDD1DULL;
+}
+
+
 // ----------------------------------------------------------------------------
 
 GPUEngine::GPUEngine(Secp256K1* secp, int nbThreadGroup, int nbThreadPerGroup, int gpuId, uint32_t maxFound,
@@ -252,6 +312,9 @@ GPUEngine::GPUEngine(Secp256K1* secp, int nbThreadGroup, int nbThreadPerGroup, i
 	CudaSafeCall(cudaMemcpy(inputBloomLookUp, inputBloomLookUpPinned, BLOOM_SIZE, cudaMemcpyHostToDevice));
 	CudaSafeCall(cudaFreeHost(inputBloomLookUpPinned));
 	inputBloomLookUpPinned = NULL;
+
+
+	CudaSafeCall(cudaMalloc((void**)&d_rngState, nbThread * sizeof(uint64_t)));
 
 	// generator table
 	InitGenratorTable(secp);
@@ -335,7 +398,7 @@ GPUEngine::GPUEngine(Secp256K1* secp, int nbThreadGroup, int nbThreadPerGroup, i
 	CudaSafeCall(cudaMemcpy(inputHashORxpoint, inputHashORxpointPinned, K_SIZE * sizeof(uint32_t), cudaMemcpyHostToDevice));
 	CudaSafeCall(cudaFreeHost(inputHashORxpointPinned));
 	inputHashORxpointPinned = NULL;
-
+	CudaSafeCall(cudaMalloc((void**)&d_rngState, nbThread * sizeof(uint64_t)));
 	// generator table
 	InitGenratorTable(secp);
 
@@ -713,6 +776,90 @@ bool GPUEngine::LaunchSEARCH_MODE_MA(std::vector<ITEM>& dataFound, bool spinWait
 	}
 	return callKernelSEARCH_MODE_MA();
 }
+
+bool GPUEngine::SetRNGSeeds(const std::vector<uint64_t>& seeds)
+{
+	if (seeds.size() < (size_t)nbThread) {
+		printf("Not enough seeds!\n");
+		return false;
+	}
+	// Copy seeds to pinned memory or directly to GPU
+	CudaSafeCall(cudaMemcpy(d_rngState, seeds.data(),
+		nbThread * sizeof(uint64_t),
+		cudaMemcpyHostToDevice));
+	return true;
+}
+
+
+
+
+bool GPUEngine::LaunchSEARCH_MODE_MA_RNG(std::vector<ITEM>& dataFound, bool spinWait)
+{
+	dataFound.clear();
+
+	// 1) Zero out the device 'found' buffer
+	CudaSafeCall(cudaMemset(outputBuffer, 0, 4));
+
+	// 2) Launch the RNG-based kernel
+	compute_keys_mode_ma_rng << < nbThread / nbThreadPerGroup, nbThreadPerGroup >> > (
+		d_rngState,            // pass RNG array
+		compMode,              // or 'mode'
+		inputBloomLookUp,
+		BLOOM_BITS,
+		BLOOM_HASHES,
+		inputKey,              // the public key array
+		maxFound,
+		outputBuffer);
+
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		printf("Kernel error: %s\n", cudaGetErrorString(err));
+		return false;
+	}
+
+	// 3) Retrieve results
+	if (spinWait) {
+		// synchronous copy
+		CudaSafeCall(cudaMemcpy(outputBufferPinned, outputBuffer, outputSize, cudaMemcpyDeviceToHost));
+	}
+	else {
+		// async + poll
+		cudaEvent_t evt;
+		CudaSafeCall(cudaEventCreate(&evt));
+		CudaSafeCall(cudaMemcpyAsync(outputBufferPinned, outputBuffer, 4, cudaMemcpyDeviceToHost, 0));
+		CudaSafeCall(cudaEventRecord(evt, 0));
+		while (cudaEventQuery(evt) == cudaErrorNotReady) {
+			Timer::SleepMillis(1);
+		}
+		CudaSafeCall(cudaEventDestroy(evt));
+		// now we know how many found
+	}
+
+	uint32_t nbFound = outputBufferPinned[0];
+	if (nbFound > maxFound) nbFound = maxFound;
+
+	// copy full results
+	CudaSafeCall(cudaMemcpy(outputBufferPinned, outputBuffer, nbFound * ITEM_SIZE_A + 4, cudaMemcpyDeviceToHost));
+
+	// parse them (same as your other Launch functions)
+	for (uint32_t i = 0; i < nbFound; i++) {
+		uint32_t* itemPtr = outputBufferPinned + (i * ITEM_SIZE_A32 + 1);
+		uint8_t* hash = (uint8_t*)(itemPtr + 2);
+
+		// Check if hash is in your puzzle set (like your existing code)
+		if (CheckBinary(hash, 20) > 0) {
+			ITEM it;
+			it.thId = itemPtr[0];
+			int16_t* ptr = (int16_t*)&(itemPtr[1]);
+			it.mode = (ptr[0] & 0x8000) != 0;
+			it.incr = ptr[1];
+			it.hash = (uint8_t*)(itemPtr + 2);
+			dataFound.push_back(it);
+		}
+	}
+	return true;
+}
+
 
 // ----------------------------------------------------------------------------
 
