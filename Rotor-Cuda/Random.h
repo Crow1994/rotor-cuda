@@ -21,5 +21,5 @@
 double rnd();
 unsigned long rndl();
 void rseed(unsigned long seed);
-void initializeRandomState();
+
 #endif

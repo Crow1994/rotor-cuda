@@ -161,7 +161,6 @@ public:
 	void Rand(Int* randMax);
 	void Set32Bytes(unsigned char* bytes);
 	void MaskByte(int n);
-	void generateKeyInRange(Int& rangeStart, Int& rangeEnd, Int& key);
 
 	// Getter
 	uint32_t GetInt32();

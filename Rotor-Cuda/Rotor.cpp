@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <iostream>
 #include <cassert>
-#include <chrono> // For high-resolution timer
 #ifndef WIN64
 #include <pthread.h>
 #endif
@@ -147,6 +146,7 @@ Rotor::Rotor(const std::vector<unsigned char>& hashORxpoint, int compMode, int s
 	this->rangeDiff2.Set(&this->rangeEnd);
 	this->rangeDiff2.Sub(&this->rangeStart);
 	this->targetCounter = 1;
+
 	secp = new Secp256K1();
 	secp->Init();
 
@@ -295,7 +295,7 @@ bool Rotor::checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode)
 			printf("  Check: %s\n", chkAddr.c_str());
 			printf("  PubX : %s\n", p.x.GetBase16().c_str());
 			printf("=================================================================================\n");
-			return true;
+			return false;
 		}
 	}
 	output(addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p));
@@ -549,7 +549,7 @@ void Rotor::getCPUStartingKey(Int & tRangeStart, Int & tRangeEnd, Int & key, Poi
 		printf("  CPU Core     : Start from range %s -> \n\n", key.GetBase16().c_str());
 	}
 	else {
-
+		
 		key.Rand(256);
 	}
 	rhex = key;
@@ -566,11 +566,11 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 	// Global init
 	int thId = ph->threadId;
-
+	
 	Int tRangeStart = ph->rangeStart;
 	Int tRangeEnd = ph->rangeEnd;
 	counters[thId] = 0;
-
+	
 	if (rKey > 0) {
 		if (rKeyCount2 == 0) {
 			if (thId == 0) {
@@ -833,221 +833,22 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 // ----------------------------------------------------------------------------
 
-
-void modulo(Int & result, Int & modulus) {
-	result.Mod(&modulus);
-	if (result.IsNegative()) {
-		result.Add(&modulus);
-	}
-}
-
-
-class RangeTracker {
-private:
-	struct ScanRange {
-		Int start;
-		Int end;
-		int64_t timestamp;
-
-		ScanRange(const Int& s, const Int& e) : start(s), end(e) {
-			timestamp = std::chrono::duration_cast<std::chrono::seconds>(
-				std::chrono::system_clock::now().time_since_epoch()
-			).count();
-		}
-	};
-
-	std::vector<ScanRange> scannedRanges;
-	Int rangeStart;  // Global range start
-	Int rangeEnd;    // Global range end
-	Int chunkSize;   // Size of each chunk
-
-public:
-	RangeTracker( Int& start,  Int& end) {
-		this->rangeStart.Set(&start);
-		this->rangeEnd.Set(&end);
-
-		// Calculate default chunk size
-		this->chunkSize.Set(&end);
-		this->chunkSize.Sub(&start);
-		Int divisor;
-		divisor.SetInt32(1000000); // 1M chunks
-		this->chunkSize.Div(&divisor);
-	}
-
-	void setChunkSize( Int& size) {
-		chunkSize.Set(&size);
-	}
-
-	void addRange(Int& start, Int& end) {
-		scannedRanges.emplace_back(start, end);
-		mergeOverlappingRanges();
-	}
-
-	bool isRangeScanned(Int& start, Int& end) {
-		for ( auto& range : scannedRanges) {
-			Int rStart;
-			Int rEnd;
-			rStart.Set(&range.start);
-			rEnd.Set(&range.end);
-
-			if (!(end.IsLower(&rStart) || start.IsGreater(&rEnd))) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool findNextUnscannedRange(Int& start, Int& end) {
-		if (scannedRanges.empty()) {
-			start.Set(&rangeStart);
-			end.Set(&rangeEnd);
-			return true;
-		}
-
-		mergeOverlappingRanges();
-
-		// Check before first range
-		if (rangeStart.IsLower(&scannedRanges[0].start)) {
-			start.Set(&rangeStart);
-			end.Set(&scannedRanges[0].start);
-			return true;
-		}
-
-		// Check between ranges
-		for (size_t i = 0; i < scannedRanges.size() - 1; i++) {
-			Int nextStart;
-			nextStart.Set(&scannedRanges[i + 1].start);
-			if (!scannedRanges[i].end.IsEqual(&nextStart)) {
-				start.Set(&scannedRanges[i].end);
-				end.Set(&scannedRanges[i + 1].start);
-				return true;
-			}
-		}
-
-		// Check after last range
-		if (scannedRanges.back().end.IsLower(&rangeEnd)) {
-			start.Set(&scannedRanges.back().end);
-			end.Set(&rangeEnd);
-			return true;
-		}
-
-		return false;
-	}
-
-	double getSearchCoverage() {
-		mergeOverlappingRanges();
-
-		Int totalRange;
-		totalRange.Set(&rangeEnd);
-		totalRange.Sub(&rangeStart);
-
-		Int coveredRange;
-		coveredRange.SetInt32(0);
-
-		for ( auto& range : scannedRanges) {
-			Int rangeSize;
-			rangeSize.Set(&range.end);
-			rangeSize.Sub(&range.start);
-			coveredRange.Add(&rangeSize);
-		}
-
-		return (coveredRange.ToDouble() / totalRange.ToDouble()) * 100.0;
-	}
-
-	void printStats() {
-		printf("\nRange Tracking Statistics:\n");
-		printf("Number of recorded ranges: %zu\n", scannedRanges.size());
-		printf("Coverage: %.2f%%\n", getSearchCoverage());
-
-		if (!scannedRanges.empty()) {
-			printf("\nLatest scanned range:\n");
-			printf("Start: %s\n", scannedRanges.back().start.GetBase16().c_str());
-			printf("End  : %s\n", scannedRanges.back().end.GetBase16().c_str());
-		}
-
-		Int start, end;
-		printf("\nUnscanned gaps:\n");
-		while (findNextUnscannedRange(start, end)) {
-			printf("Gap: %s -> %s\n",
-				start.GetBase16().c_str(),
-				end.GetBase16().c_str());
-		}
-	}
-
-private:
-	void mergeOverlappingRanges() {
-		if (scannedRanges.empty()) return;
-
-		// Sort ranges by start position
-		std::sort(scannedRanges.begin(), scannedRanges.end(),
-			[]( ScanRange& a,  ScanRange& b) {
-				Int aStart; aStart.Set(&a.start);
-				Int bStart; bStart.Set(&b.start);
-				return aStart.IsLower(&bStart);
-			});
-
-		std::vector<ScanRange> merged;
-		merged.push_back(scannedRanges[0]);
-
-		for (size_t i = 1; i < scannedRanges.size(); i++) {
-			Int curEnd; curEnd.Set(&merged.back().end);
-			Int nextStart; nextStart.Set(&scannedRanges[i].start);
-
-			if (!curEnd.IsLower(&nextStart)) {
-				// Ranges overlap or are adjacent
-				if (merged.back().end.IsLower(&scannedRanges[i].end)) {
-					merged.back().end.Set(&scannedRanges[i].end);
-				}
-			}
-			else {
-				merged.push_back(scannedRanges[i]);
-			}
-		}
-
-		scannedRanges = std::move(merged);
-	}
-};
-
-
 void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
 {
-
-
 	if (rKey > 0) {
-
-		Int tRangeDiff(tRangeEnd);
-		Int tRangeStart2(tRangeStart);
-		Int tRangeEnd2(tRangeStart);
-
-		Int tThreads;
-		tThreads.SetInt32(nbThread);
-		tRangeDiff.Set(&tRangeEnd);
-		tRangeDiff.Sub(&tRangeStart);
-		razn = tRangeDiff;
-		tRangeDiff.Div(&tThreads);
-
-		int rangeShowThreasold = 3;
-		int rangeShowCounter = 0;
-		//printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
-		for (int i = 0; i < nbThread + 1; i++) {
-
-			tRangeEnd2.Set(&tRangeStart2);
-			tRangeEnd2.Add(&tRangeDiff);
-
-			keys[i].Set(&tRangeStart2);
-			Int dobb;
-			dobb.Set(&tRangeStart2);
-			dobb.Add(&tRangeDiff);
-
-			tRangeStart2.Add(&tRangeDiff);
+		if (rKeyCount2 == 0) {
+			printf("  Base Key     : Randomly changes %d start Private keys every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
+		}
+		
+		for (int i = 0; i < nbThread; i++) {
+			keys[i].Rand(256);
+			rhex = keys[i];
 			Int k(keys + i);
 			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
 			p[i] = secp->ComputePublicKey(&k);
+
 		}
 	}
-
-
-
 	else {
 
 		Int tRangeDiff(tRangeEnd);
@@ -1064,7 +865,7 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 		int rangeShowThreasold = 3;
 		int rangeShowCounter = 0;
 		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
-		for (int i = 0; i < nbThread + 1; i++) {
+		for (int i = 0; i < nbThread +1; i++) {
 
 			tRangeEnd2.Set(&tRangeStart2);
 			tRangeEnd2.Add(&tRangeDiff);
@@ -1107,37 +908,6 @@ void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize
 	}
 }
 
-
-#include <random>
-// Function to generate deterministic range sequence
-Int GetNextRange(uint64_t seed, Int& rangeStart, Int& rangeEnd) {
-	Int rangeSize;
-	rangeSize.Set(&rangeEnd);
-	rangeSize.Sub(&rangeStart);
-
-	// Initialize random number generator with seed
-	std::mt19937_64 rng(seed);  // 64-bit Mersenne Twister
-	std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
-
-	// Generate two 64-bit random numbers to form a 128-bit number
-	uint64_t rnd1 = dist(rng);
-	uint64_t rnd2 = dist(rng);
-
-	// Combine them into a larger Int if your Int class supports it
-	Int randomStart;
-	// Assuming Int can be constructed from two uint64_t values
-	//randomStart.SetFromTwoUInt64(rnd1, rnd2);
-
-	// Compute randomStart modulo rangeSize
-	randomStart.Mod(&rangeSize);
-
-	// Shift into the desired range
-	randomStart.Add(&rangeStart);
-
-	return randomStart;
-}
-
-
 void Rotor::FindKeyGPU(TH_PARAM * ph)
 {
 
@@ -1171,40 +941,37 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 		break;
 	}
 
-	printf("  GPU          : %s\n\n", g->deviceName.c_str());
-	counters[thId] = 0;
 
-	// 2) Optionally set an initial "dummy" public key array (only once)
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
 	Int* keys = new Int[nbThread];
-	// Fill with zero or something
-	for (int i = 0; i < nbThread; i++) {
-		keys[i].SetInt32(0);
-		p[i] = secp->ComputePublicKey(&keys[i]);
-	}
-	ok = g->SetKeys(p);  // Just sets the base pubkeys
-
-	// 3) Now set the RNG seeds (one seed per thread)
-	std::vector<uint64_t> seeds(nbThread);
-	for (int i = 0; i < nbThread; i++) {
-		seeds[i] = 0xAABB00000000ULL + i; // or something random
-	}
-	g->SetRNGSeeds(seeds);
-
-
-	// 4) Main loop: call the *RNG-based* kernel each iteration
 	std::vector<ITEM> found;
-	ph->hasStarted = true;
-	while (ok && !endOfSearch) {
-		found.clear();
 
-		// Call *RNG-based* launch
+	printf("  GPU          : %s\n\n", g->deviceName.c_str());
+
+	counters[thId] = 0;
+
+	getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+	ok = g->SetKeys(p);
+
+	ph->hasStarted = true;
+	ph->rKeyRequest = false;
+
+	// GPU Thread
+	while (ok && !endOfSearch) {
+
+		if (ph->rKeyRequest) {
+			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+			ok = g->SetKeys(p);
+			ph->rKeyRequest = false;
+		}
+
+		// Call kernel
 		switch (searchMode) {
 		case (int)SEARCH_MODE_MA:
-			ok = g->LaunchSEARCH_MODE_MA_RNG(found, false);
-			// then handle 'found' items as usual...
-			for (ITEM& it : found) {
+			ok = g->LaunchSEARCH_MODE_MA(found, false);
+			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
+				ITEM it = found[i];
 				if (coinType == COIN_BTC) {
 					std::string addr = secp->GetAddress(it.mode, it.hash);
 					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
@@ -1219,32 +986,72 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 				}
 			}
 			break;
-
-			// If you have "RNG" versions for other modes, do similarly:
 		case (int)SEARCH_MODE_MX:
-			// g->LaunchSEARCH_MODE_MX_RNG(...);
+			ok = g->LaunchSEARCH_MODE_MX(found, false);
+			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
+				ITEM it = found[i];
+				//Point pk;
+				//memcpy((uint32_t*)pk.x.bits, (uint32_t*)it.hash, 8);
+				//string addr = secp->GetAddress(it.mode, pk);
+				if (checkPrivKeyX(/*addr,*/ keys[it.thId], it.incr, it.mode)) {
+					nbFoundKey++;
+				}
+			}
 			break;
 		case (int)SEARCH_MODE_SA:
-			// g->LaunchSEARCH_MODE_SA_RNG(...);
+			ok = g->LaunchSEARCH_MODE_SA(found, false);
+			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
+				ITEM it = found[i];
+				if (coinType == COIN_BTC) {
+					std::string addr = secp->GetAddress(it.mode, it.hash);
+					if (checkPrivKey(addr, keys[it.thId], it.incr, it.mode)) {
+						nbFoundKey++;
+					}
+				}
+				else {
+					std::string addr = secp->GetAddressETH(it.hash);
+					if (checkPrivKeyETH(addr, keys[it.thId], it.incr)) {
+						nbFoundKey++;
+					}
+				}
+			}
 			break;
-			// ...
+		case (int)SEARCH_MODE_SX:
+			ok = g->LaunchSEARCH_MODE_SX(found, false);
+			for (int i = 0; i < (int)found.size() && !endOfSearch; i++) {
+				ITEM it = found[i];
+				//Point pk;
+				//memcpy((uint32_t*)pk.x.bits, (uint32_t*)it.hash, 8);
+				//string addr = secp->GetAddress(it.mode, pk);
+				if (checkPrivKeyX(/*addr,*/ keys[it.thId], it.incr, it.mode)) {
+					nbFoundKey++;
+				}
+			}
+			break;
+		default:
+			break;
 		}
 
-		// 5) Update counters
-		// Each RNG-based kernel processes STEP_SIZE keys * nbThread implicitly.
-		counters[thId] += (uint64_t)(STEP_SIZE)*nbThread;
+		if (ok) {
+			for (int i = 0; i < nbThread; i++) {
+				keys[i].Add((uint64_t)STEP_SIZE);
+			}
+			counters[thId] += (uint64_t)(STEP_SIZE)*nbThread; // Point
+		}
+
 	}
 
-	// cleanup
-	delete[] p;
 	delete[] keys;
+	delete[] p;
 	delete g;
-	ph->isRunning = false;
+
 #else
 	ph->hasStarted = true;
 	printf("  GPU code not compiled, use -DWITHGPU when compiling.\n");
-	ph->isRunning = false;
 #endif
+
+	ph->isRunning = false;
+
 }
 
 // ----------------------------------------------------------------------------
@@ -1363,39 +1170,18 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 #endif
 	}
 
- // Calculate total range
-    Int totalRange;
-    totalRange.Set(&rangeEnd);
-    totalRange.Sub(&rangeStart);
-    
-    // Calculate range per GPU
-    Int gpuRangeSize;
-    gpuRangeSize.Set(&totalRange);
-    Int gpuCount2;
-	gpuCount2.SetInt32(nbGPUThread);
-    gpuRangeSize.Div(&gpuCount2);
-    
-    Int currentGPUStart;
-    currentGPUStart.Set(&rangeStart);
+	// Launch GPU threads
+	for (int i = 0; i < nbGPUThread; i++) {
+		params[nbCPUThread + i].obj = this;
+		params[nbCPUThread + i].threadId = 0x80L + i;
+		params[nbCPUThread + i].isRunning = true;
+		params[nbCPUThread + i].gpuId = gpuId[i];
+		params[nbCPUThread + i].gridSizeX = gridSize[2 * i];
+		params[nbCPUThread + i].gridSizeY = gridSize[2 * i + 1];
 
-    // Launch GPU threads with different ranges
-    for (int i = 0; i < nbGPUThread; i++) {
-        params[nbCPUThread + i].obj = this;
-        params[nbCPUThread + i].threadId = 0x80L + i;
-        params[nbCPUThread + i].isRunning = true;
-        params[nbCPUThread + i].gpuId = gpuId[i];
-        params[nbCPUThread + i].gridSizeX = gridSize[2 * i];
-        params[nbCPUThread + i].gridSizeY = gridSize[2 * i + 1];
-
-        // Set unique range for each GPU
-        params[nbCPUThread + i].rangeStart.Set(&currentGPUStart);
-        currentGPUStart.Add(&gpuRangeSize);
-        params[nbCPUThread + i].rangeEnd.Set(&currentGPUStart);
-
-        // Print range assignment for each GPU
-        printf("GPU %d scanning range:\n", gpuId[i]);
-        printf("Start: %s\n", params[nbCPUThread + i].rangeStart.GetBase16().c_str());
-        printf("End  : %s\n\n", params[nbCPUThread + i].rangeEnd.GetBase16().c_str());
+		params[nbCPUThread + i].rangeStart.Set(&rangeStart);
+		rangeStart.Add(&rangeDiff);
+		params[nbCPUThread + i].rangeEnd.Set(&rangeStart);
 
 
 #ifdef WIN64
@@ -1482,8 +1268,8 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 
 		if (rKey > 0) {
 			if (isAlive(params)) {
-				//rhex.Add(count);
-
+				rhex.Add(count);
+				
 				if (avgGpuKeyRate > 1000000000) {
 
 					memset(timeStr, '\0', 256);
@@ -1510,7 +1296,7 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 			}
 		}
 		else {
-
+			
 			if (avgGpuKeyRate > 1000000000) {
 				if (isAlive(params)) {
 					memset(timeStr, '\0', 256);
@@ -1540,8 +1326,8 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 				}
 			}
 		}
-
-
+		
+		
 		if (rKey > 0) {
 			if ((count - lastrKey) > (1000000000 * rKey)) {
 				// rKey request
@@ -1561,7 +1347,7 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 
 	free(params);
 
-}
+	}
 
 // ----------------------------------------------------------------------------
 
@@ -1711,5 +1497,7 @@ char* Rotor::toTimeStr(int sec, char* timeStr)
 //	//y = y / mpf_class(r);
 //	return 0;// y.get_d();
 //}
+
+
 
 
