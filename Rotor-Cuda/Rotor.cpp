@@ -295,7 +295,7 @@ bool Rotor::checkPrivKey(std::string addr, Int& key, int32_t incr, bool mode)
 			printf("  Check: %s\n", chkAddr.c_str());
 			printf("  PubX : %s\n", p.x.GetBase16().c_str());
 			printf("=================================================================================\n");
-			return false;
+			return true;
 		}
 	}
 	output(addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p));
@@ -549,7 +549,7 @@ void Rotor::getCPUStartingKey(Int & tRangeStart, Int & tRangeEnd, Int & key, Poi
 		printf("  CPU Core     : Start from range %s -> \n\n", key.GetBase16().c_str());
 	}
 	else {
-		
+
 		key.Rand(256);
 	}
 	rhex = key;
@@ -566,11 +566,11 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 	// Global init
 	int thId = ph->threadId;
-	
+
 	Int tRangeStart = ph->rangeStart;
 	Int tRangeEnd = ph->rangeEnd;
 	counters[thId] = 0;
-	
+
 	if (rKey > 0) {
 		if (rKeyCount2 == 0) {
 			if (thId == 0) {
@@ -833,80 +833,75 @@ void Rotor::FindKeyCPU(TH_PARAM * ph)
 
 // ----------------------------------------------------------------------------
 
-void Rotor::getGPUStartingKeys(Int & tRangeStart, Int & tRangeEnd, int groupSize, int nbThread, Int * keys, Point * p)
-{
-	if (rKey > 0) {
-		if (rKeyCount2 == 0) {
-			printf("  Base Key     : Randomly changes %d start Private keys every %llu.000.000.000 on the counter\n\n", nbThread, rKey);
-		}
-		
-		for (int i = 0; i < nbThread; i++) {
-			keys[i].Rand(256);
-			rhex = keys[i];
-			Int k(keys + i);
-			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
-			p[i] = secp->ComputePublicKey(&k);
 
-		}
-	}
-	else {
-
-		Int tRangeDiff(tRangeEnd);
-		Int tRangeStart2(tRangeStart);
-		Int tRangeEnd2(tRangeStart);
-
-		Int tThreads;
-		tThreads.SetInt32(nbThread);
-		tRangeDiff.Set(&tRangeEnd);
-		tRangeDiff.Sub(&tRangeStart);
-		razn = tRangeDiff;
-		tRangeDiff.Div(&tThreads);
-
-		int rangeShowThreasold = 3;
-		int rangeShowCounter = 0;
-		printf("  Divide the range %s into %d threads for fast parallel search \n", razn.GetBase16().c_str(), nbThread);
-		for (int i = 0; i < nbThread +1; i++) {
-
-			tRangeEnd2.Set(&tRangeStart2);
-			tRangeEnd2.Add(&tRangeDiff);
-
-			keys[i].Set(&tRangeStart2);
-			if (i == 0) {
-				printf("  Thread 00000: %064s ->", keys[i].GetBase16().c_str());
-			}
-			Int dobb;
-			dobb.Set(&tRangeStart2);
-			dobb.Add(&tRangeDiff);
-			if (i == 0) {
-				printf(" %064s \n", dobb.GetBase16().c_str());
-			}
-			if (i == 1) {
-				printf("  Thread 00001: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == 2) {
-				printf("  Thread 00002: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == 3) {
-				printf("  Thread 00003: %064s -> %064s \n", tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-				printf("          ... : \n");
-			}
-			if (i == nbThread - 2) {
-				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == nbThread - 1) {
-				printf("  Thread %d: %064s -> %064s \n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-			if (i == nbThread) {
-				printf("  Thread %d: %064s -> %064s \n\n", i, tRangeStart2.GetBase16().c_str(), dobb.GetBase16().c_str());
-			}
-
-			tRangeStart2.Add(&tRangeDiff);
-			Int k(keys + i);
-			k.Add((uint64_t)(groupSize / 2));	// Starting key is at the middle of the group
-			p[i] = secp->ComputePublicKey(&k);
-		}
+void modulo(Int & result, Int & modulus) {
+	result.Mod(&modulus);
+	if (result.IsNegative()) {
+		result.Add(&modulus);
 	}
 }
+
+
+
+
+
+
+Int Rotor::generateRandomKey(const Int &rangeStart, const Int &rangeEnd) {
+    // Compute diff = rangeEnd - rangeStart
+    Int diff(rangeEnd);
+    diff.Sub(&rangeStart);
+
+    // Get the bit-length of the difference so we generate a random number in that many bits
+    int bits = diff.GetBitLength();
+    
+    // Generate a random number of that many bits.
+    Int offset;
+    offset.Rand(bits); 
+    // Make sure the offset is in [0, diff)
+    offset.Mod(&diff);
+
+    // result = rangeStart + offset
+    Int result(rangeStart);
+    result.Add(&offset);
+
+    return result;
+}
+
+
+
+
+void Rotor::getGPUStartingKeys(Int &tRangeStart, Int &tRangeEnd, int groupSize, int nbThread, Int *keys, Point *p) {
+    if (rKey > 0) {
+        // For each GPU thread, select a random key from the global range.
+        for (int i = 0; i < nbThread; i++) {
+            keys[i] = generateRandomKey(tRangeStart, tRangeEnd);
+            // Compute the public key at the “middle” of the group.
+            Int midKey(keys[i]);
+            midKey.Add((uint64_t)(groupSize / 2));
+            p[i] = secp->ComputePublicKey(&midKey);
+        }
+    } else {
+        // Otherwise, use the sequential partitioning method as you already have.
+        Int tRangeDiff(tRangeEnd);
+        tRangeDiff.Sub(&tRangeStart);
+        Int tRangeStart2(tRangeStart);
+        Int tRangeDiffPerThread(tRangeDiff);
+        Int tThreads;
+        tThreads.SetInt32(nbThread);
+        tRangeDiffPerThread.Div(&tThreads);
+        for (int i = 0; i < nbThread; i++) {
+            keys[i].Set(&tRangeStart2);
+            Int midKey(keys[i]);
+            midKey.Add((uint64_t)(groupSize / 2));
+            p[i] = secp->ComputePublicKey(&midKey);
+            tRangeStart2.Add(&tRangeDiffPerThread);
+        }
+    }
+}
+
+
+#include <chrono> // For high-resolution timer
+
 
 void Rotor::FindKeyGPU(TH_PARAM * ph)
 {
@@ -942,6 +937,8 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	}
 
 
+	int iterationsSinceLastJump = 0;
+
 	int nbThread = g->GetNbThread();
 	Point* p = new Point[nbThread];
 	Int* keys = new Int[nbThread];
@@ -957,14 +954,32 @@ void Rotor::FindKeyGPU(TH_PARAM * ph)
 	ph->hasStarted = true;
 	ph->rKeyRequest = false;
 
+
+	const int JUMP_INTERVAL_SECONDS = 5; // Adjust as needed
+
 	// GPU Thread
 	while (ok && !endOfSearch) {
 
+
+
+	// Inside your GPU search loop
+if (++iterationsSinceLastJump >= JUMP_INTERVAL_ITERATIONS) { 
+    // Reset the timer or counter as needed.
+    iterationsSinceLastJump = 0;
+    // Generate new starting keys for each thread.
+    getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
+    ok = g->SetKeys(p);
+    rhex.Set(&keys[ph->threadId]);
+}
+
+
+
+		/*
 		if (ph->rKeyRequest) {
 			getGPUStartingKeys(tRangeStart, tRangeEnd, g->GetGroupSize(), nbThread, keys, p);
 			ok = g->SetKeys(p);
 			ph->rKeyRequest = false;
-		}
+		}*/
 
 		// Call kernel
 		switch (searchMode) {
@@ -1268,8 +1283,8 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 
 		if (rKey > 0) {
 			if (isAlive(params)) {
-				rhex.Add(count);
-				
+				//rhex.Add(count);
+
 				if (avgGpuKeyRate > 1000000000) {
 
 					memset(timeStr, '\0', 256);
@@ -1296,7 +1311,7 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 			}
 		}
 		else {
-			
+
 			if (avgGpuKeyRate > 1000000000) {
 				if (isAlive(params)) {
 					memset(timeStr, '\0', 256);
@@ -1326,8 +1341,8 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 				}
 			}
 		}
-		
-		
+
+
 		if (rKey > 0) {
 			if ((count - lastrKey) > (1000000000 * rKey)) {
 				// rKey request
@@ -1347,7 +1362,7 @@ void Rotor::Search(int nbThread, std::vector<int> gpuId, std::vector<int> gridSi
 
 	free(params);
 
-	}
+}
 
 // ----------------------------------------------------------------------------
 
@@ -1497,7 +1512,4 @@ char* Rotor::toTimeStr(int sec, char* timeStr)
 //	//y = y / mpf_class(r);
 //	return 0;// y.get_d();
 //}
-
-
-
 
